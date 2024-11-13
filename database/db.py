@@ -53,8 +53,8 @@ class DbConnection:
             PhoneMessage.time_request.isnot(None),
             PhoneMessage.message.isnot(None),
             PhoneMessage.time_request < time_response,
-            PhoneMessage.time_request > time_response + timedelta(minutes=2)
-        ).order_by(PhoneMessage.time_request.desc()).first()
+            PhoneMessage.time_request > time_response - timedelta(minutes=2)
+        ).order_by(PhoneMessage.time_request.asc()).first()
 
         if mes:
             mes.time_response = time_response
