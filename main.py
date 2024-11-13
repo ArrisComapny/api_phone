@@ -64,7 +64,7 @@ async def get_sms(virtual_phone_number: str,
 
     notification_time = datetime.strptime(
         notification_time, "%Y-%m-%d %H:%M:%S.%f"
-    ).replace(tzinfo=timezone.utc).astimezone(tz=timezone(timedelta(hours=3)))
+    ).replace(tzinfo=timezone.utc).astimezone(tz=timezone(timedelta(hours=3))).replace(tzinfo=None)
 
     message = unquote(message)
     match = re.search(r'\b\d{6}\b', message)
