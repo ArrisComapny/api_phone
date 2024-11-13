@@ -12,8 +12,8 @@ from database.db import DbConnection
 
 
 class IPFilterMiddleware(BaseHTTPMiddleware):
-    def __init__(self, application, allowed_ips: list[str]):
-        super().__init__(application)
+    def __init__(self, app, allowed_ips: list[str]):
+        super().__init__(app)
         self.allowed_ips = allowed_ips
 
     async def dispatch(self, request: Request, call_next):
