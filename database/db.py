@@ -53,7 +53,7 @@ class DbConnection:
             mes = self.session.query(PhoneMessage).filter(
                 PhoneMessage.phone == virtual_phone_number,
                 PhoneMessage.time_request.isnot(None),
-                PhoneMessage.message.isnot(None),
+                PhoneMessage.message.is_(None),
                 PhoneMessage.time_request < time_response,
                 PhoneMessage.time_request > time_response - timedelta(minutes=2)
             ).order_by(PhoneMessage.time_request.asc()).first()
@@ -62,7 +62,7 @@ class DbConnection:
                 PhoneMessage.phone == virtual_phone_number,
                 PhoneMessage.marketplace == marketplace,
                 PhoneMessage.time_request.isnot(None),
-                PhoneMessage.message.isnot(None),
+                PhoneMessage.message.is_(None),
                 PhoneMessage.time_request < time_response,
                 PhoneMessage.time_request > time_response - timedelta(minutes=2)
             ).order_by(PhoneMessage.time_request.asc()).first()
