@@ -57,12 +57,9 @@ async def get_sms(virtual_phone_number: str,
                   contact_phone_number: str,
                   message: str):
     db_conn = DbConnection()
-    if virtual_phone_number.startswith('+7'):
-        virtual_phone_number = virtual_phone_number[2:]
-    elif virtual_phone_number.startswith('8'):
-        virtual_phone_number = virtual_phone_number[1:]
 
     virtual_phone_number = re.sub(r'\D', '', virtual_phone_number)
+    virtual_phone_number = virtual_phone_number[-10:]
 
     notification_time = datetime.strptime(
         notification_time, "%Y-%m-%d %H:%M:%S.%f"
