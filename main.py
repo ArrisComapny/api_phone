@@ -46,7 +46,7 @@ async def get_call(virtual_phone_number: str,
     contact_phone_number = re.sub(r'\D', '', contact_phone_number)
     message = contact_phone_number[-6:]
 
-    db_conn.add_message(phone_number=virtual_phone_number,
+    db_conn.add_message(virtual_phone_number=virtual_phone_number,
                         time_response=notification_time,
                         message=message,
                         marketplace='Ozon')
@@ -78,7 +78,7 @@ async def get_sms(virtual_phone_number: str,
         marketplace = None
 
     print(virtual_phone_number, notification_time, message, marketplace)
-    db_conn.add_message(phone_number=virtual_phone_number,
+    db_conn.add_message(virtual_phone_number=virtual_phone_number,
                         time_response=notification_time,
                         message=message,
                         marketplace=marketplace)
