@@ -40,7 +40,7 @@ async def get_call(virtual_phone_number: str,
     virtual_phone_number = virtual_phone_number[-10:]
 
     notification_time = datetime.strptime(
-        notification_time, "%Y-%m-%d+%H:%M:%S.%f"
+        notification_time, "%Y-%m-%d %H:%M:%S.%f"
     ).replace(tzinfo=timezone.utc).astimezone(tz=timezone(timedelta(hours=3)))
 
     contact_phone_number = re.sub(r'\D', '', contact_phone_number)
@@ -63,7 +63,7 @@ async def get_sms(virtual_phone_number: str,
     virtual_phone_number = virtual_phone_number[-10:]
 
     notification_time = datetime.strptime(
-        notification_time, "%Y-%m-%d+%H:%M:%S.%f"
+        notification_time, "%Y-%m-%d %H:%M:%S.%f"
     ).replace(tzinfo=timezone.utc).astimezone(tz=timezone(timedelta(hours=3)))
 
     message = unquote(message)
