@@ -62,9 +62,9 @@ async def get_sms(virtual_phone_number: str,
     virtual_phone_number = virtual_phone_number[-10:]
 
     notification_time = datetime.strptime(notification_time, "%Y-%m-%d %H:%M:%S.%f")
-    now_time = datetime.now(tz=timezone(timedelta(hours=3)))
+    now_time = datetime.now(tz=timezone(timedelta(hours=3))).replace(tzinfo=None)
     hours = round((now_time - notification_time).total_seconds() / 3600)
-    print(hours)
+    print(hours, notification_time, now_time)
     notification_time += timedelta(hours=hours)
 
     message = unquote(message)
