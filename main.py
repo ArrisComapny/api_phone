@@ -1,14 +1,17 @@
 import re
 
 from urllib.parse import unquote
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 
 from fastapi.middleware import Middleware
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Depends
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from config import ALLOWED_IPS
 from database.db import DbConnection
+
+
+db_connect = DbConnection()
 
 
 class IPFilterMiddleware(BaseHTTPMiddleware):
@@ -23,19 +26,18 @@ class IPFilterMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-app = FastAPI(
-    middleware=[
-        Middleware(IPFilterMiddleware, allowed_ips=ALLOWED_IPS)
-    ]
-)
+app = FastAPI( middleware=[Middleware(IPFilterMiddleware, allowed_ips=ALLOWED_IPS)])
+
+
+def get_db():
+    return db_connect
 
 
 @app.get("/call")
 async def get_call(virtual_phone_number: str,
                    notification_time: str,
-                   contact_phone_number: str):
-    db_conn = DbConnection()
-
+                   contact_phone_number: str,
+                   db_conn: DbConnection = Depends(get_db)):
     virtual_phone_number = re.sub(r'\D', '', virtual_phone_number)
     virtual_phone_number = virtual_phone_number[-10:]
 
@@ -54,9 +56,8 @@ async def get_call(virtual_phone_number: str,
 async def get_sms(virtual_phone_number: str,
                   notification_time: str,
                   contact_phone_number: str,
-                  message: str):
-    db_conn = DbConnection()
-
+                  message: str,
+                  db_conn: DbConnection = Depends(get_db)):
     virtual_phone_number = re.sub(r'\D', '', virtual_phone_number)
     virtual_phone_number = virtual_phone_number[-10:]
 
