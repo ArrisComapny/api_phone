@@ -1,7 +1,7 @@
 import re
 
 from urllib.parse import unquote
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi.middleware import Middleware
 from fastapi import FastAPI, Request, HTTPException, Depends
@@ -61,7 +61,11 @@ async def get_sms(virtual_phone_number: str,
     virtual_phone_number = re.sub(r'\D', '', virtual_phone_number)
     virtual_phone_number = virtual_phone_number[-10:]
 
-    notification_time = datetime.strptime(notification_time, "%Y-%m-%d %H:%M:%S.%f") + timedelta(hours=3)
+    notification_time = datetime.strptime(notification_time, "%Y-%m-%d %H:%M:%S.%f")
+    now_time = datetime.now(tz=timezone(timedelta(hours=3)))
+    hours = round((now_time - notification_time).total_seconds() / 3600)
+    print(hours)
+    notification_time += timedelta(hours=hours)
 
     message = unquote(message)
     match = re.search(r'\b\d{6}\b', message)

@@ -90,4 +90,5 @@ class DbConnection:
                                time_request=time_response - timedelta(minutes=2),
                                time_response=time_response,
                                message=message)
+            self.session.add(new)
         self.session.commit()
