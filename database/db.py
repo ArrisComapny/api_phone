@@ -76,19 +76,11 @@ class DbConnection:
                 PhoneMessage.time_response.is_(None),
                 PhoneMessage.message.is_(None),
                 PhoneMessage.time_request < time_response,
-                PhoneMessage.time_request > time_response - timedelta(minutes=2)
+                PhoneMessage.time_request >= time_response - timedelta(minutes=2)
             ).order_by(PhoneMessage.time_request.asc()).first()
-        print(mes)
+
         if mes:
-            print(mes.id)
             mes.time_response = time_response
             mes.message = message
-        else:
-            new = PhoneMessage(user='droid216',
-                               phone=virtual_phone_number,
-                               marketplace='WB',
-                               time_request=time_response - timedelta(minutes=2),
-                               time_response=time_response,
-                               message=message)
-            self.session.add(new)
+
         self.session.commit()

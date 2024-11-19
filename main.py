@@ -75,10 +75,11 @@ async def get_sms(virtual_phone_number: str,
 
     if contact_phone_number == 'Wildberries':
         marketplace = 'WB'
+    elif contact_phone_number == 'OZON.ru':
+        marketplace = 'Ozon'
     else:
         marketplace = None
 
-    print(virtual_phone_number, notification_time, message, marketplace)
     db_conn.add_message(virtual_phone_number=virtual_phone_number,
                         time_response=notification_time,
                         message=message,
