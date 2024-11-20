@@ -61,15 +61,7 @@ class DbConnection:
     @retry_on_exception()
     def add_message(self, virtual_phone_number: str, time_response: datetime, message: str,
                     marketplace: str = None) -> None:
-        if marketplace is None or marketplace not in ['WB', 'Ozon']:
-            mes = self.session.query(PhoneMessage).filter(
-                PhoneMessage.phone == virtual_phone_number,
-                PhoneMessage.time_response.is_(None),
-                PhoneMessage.message.is_(None),
-                PhoneMessage.time_request < time_response,
-                PhoneMessage.time_request > time_response - timedelta(minutes=2)
-            ).order_by(PhoneMessage.time_request.asc()).first()
-        else:
+        if marketplace:
             mes = self.session.query(PhoneMessage).filter(
                 PhoneMessage.phone == virtual_phone_number,
                 PhoneMessage.marketplace == marketplace,
@@ -79,8 +71,7 @@ class DbConnection:
                 PhoneMessage.time_request >= time_response - timedelta(minutes=2)
             ).order_by(PhoneMessage.time_request.asc()).first()
 
-        if mes:
-            mes.time_response = time_response
-            mes.message = message
-
-        self.session.commit()
+            if mes:
+                mes.time_response = time_response
+                mes.message = message
+                self.session.commit()

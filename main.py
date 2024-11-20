@@ -10,7 +10,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from config import ALLOWED_IPS
 from database.db import DbConnection
 
-
 db_connect = DbConnection()
 
 
@@ -26,7 +25,7 @@ class IPFilterMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-app = FastAPI( middleware=[Middleware(IPFilterMiddleware, allowed_ips=ALLOWED_IPS)])
+app = FastAPI(middleware=[Middleware(IPFilterMiddleware, allowed_ips=ALLOWED_IPS)])
 
 
 def get_db():
@@ -41,10 +40,15 @@ async def get_call(virtual_phone_number: str,
     virtual_phone_number = re.sub(r'\D', '', virtual_phone_number)
     virtual_phone_number = virtual_phone_number[-10:]
 
-    notification_time = datetime.strptime(notification_time, "%Y-%m-%d %H:%M:%S.%f") + timedelta(hours=3)
+    notification_time = datetime.strptime(notification_time, "%Y-%m-%d %H:%M:%S.%f")
+    now_time = datetime.now(tz=timezone(timedelta(hours=3))).replace(tzinfo=None)
+    hours = round((now_time - notification_time).total_seconds() / 3600)
+    notification_time += timedelta(hours=hours)
 
     contact_phone_number = re.sub(r'\D', '', contact_phone_number)
     message = contact_phone_number[-6:]
+
+    print(virtual_phone_number, notification_time, message)
 
     db_conn.add_message(virtual_phone_number=virtual_phone_number,
                         time_response=notification_time,
@@ -64,7 +68,6 @@ async def get_sms(virtual_phone_number: str,
     notification_time = datetime.strptime(notification_time, "%Y-%m-%d %H:%M:%S.%f")
     now_time = datetime.now(tz=timezone(timedelta(hours=3))).replace(tzinfo=None)
     hours = round((now_time - notification_time).total_seconds() / 3600)
-    print(hours, notification_time, now_time)
     notification_time += timedelta(hours=hours)
 
     message = unquote(message)
@@ -73,14 +76,9 @@ async def get_sms(virtual_phone_number: str,
     if match:
         message = match.group(0)
 
-    if contact_phone_number == 'Wildberries':
-        marketplace = 'WB'
-    elif contact_phone_number == 'OZON.ru':
-        marketplace = 'Ozon'
-    else:
-        marketplace = None
+    marketplace = {'Wildberries': 'WB', 'OZON.ru': 'Ozon'}
 
     db_conn.add_message(virtual_phone_number=virtual_phone_number,
                         time_response=notification_time,
                         message=message,
-                        marketplace=marketplace)
+                        marketplace=marketplace[contact_phone_number])
