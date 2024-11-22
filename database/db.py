@@ -5,7 +5,7 @@ from functools import wraps
 from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func as f
 from pyodbc import Error as PyodbcError
 from sqlalchemy.exc import OperationalError
 
@@ -75,3 +75,20 @@ class DbConnection:
                 mes.time_response = time_response
                 mes.message = message
                 self.session.commit()
+
+    @retry_on_exception()
+    def add_log(self, timestamp: datetime, timestamp_user: datetime, action: str, user: str, ip_address: str,
+                city: str, country: str, proxy: str, description: str) -> None:
+        user_bd = self.session.query(User).filter(f.lower(User.user) == user.lower()).first()
+        log = Log(timestamp=timestamp,
+                  timestamp_user=timestamp_user,
+                  action=action,
+                  user=user_bd.user,
+                  ip_address=ip_address,
+                  city=city,
+                  country=country,
+                  proxy=proxy,
+                  description=description)
+
+        self.session.add(log)
+        self.session.commit()
