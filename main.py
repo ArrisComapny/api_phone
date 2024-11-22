@@ -4,11 +4,12 @@ from urllib.parse import unquote
 from datetime import datetime, timedelta, timezone
 
 from fastapi.middleware import Middleware
-from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi import FastAPI, Request, Depends
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from config import ALLOWED_IPS
 from database.db import DbConnection
+from pydantic_models import LogEntry
 
 db_connect = DbConnection()
 
@@ -85,22 +86,6 @@ async def get_sms(virtual_phone_number: str,
 
 
 @app.post("/log")
-async def get_log(timestamp: str, timestamp_user: str, action: str, user: str, ip_address: str,
-                  city: str, country: str, proxy: str, description: str,
-                  db_conn: DbConnection = Depends(get_db)):
-    timestamp = datetime.fromisoformat(timestamp)
-    try:
-        timestamp_user = datetime.fromisoformat(timestamp_user)
-    except (ValueError, TypeError) as e:
-        print(f"Ошибка при обработке timestamp_user: {e}")
-        timestamp_user = None
-
-    db_conn.add_log(timestamp=timestamp,
-                    timestamp_user=timestamp_user,
-                    action=action,
-                    user=user,
-                    ip_address=ip_address,
-                    city=city,
-                    country=country,
-                    proxy=proxy,
-                    description=description)
+async def get_log(entry: LogEntry, db_conn: DbConnection = Depends(get_db)):
+    db_conn.add_log(**entry.dict())
+    return {"status": "success", "message": "Log saved successfully"}
