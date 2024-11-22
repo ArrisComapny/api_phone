@@ -46,8 +46,3 @@ class Log(Base):
     country = Column(String(length=255), nullable=False)
     proxy = Column(String(length=255), nullable=True)
     description = Column(Text, nullable=False)
-
-    __table_args__ = (
-        UniqueConstraint('time_request', name='phone_message_time_request_unique'),
-        UniqueConstraint('time_response', name='phone_message_time_response_unique'),
-    )
