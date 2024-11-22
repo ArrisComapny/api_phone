@@ -20,8 +20,8 @@ class IPFilterMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         client_ip = request.client.host
+        print(client_ip)
         if client_ip not in self.allowed_ips:
-            print(client_ip)
             raise HTTPException(status_code=403, detail="Access forbidden")
         return await call_next(request)
 
