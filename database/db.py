@@ -79,11 +79,12 @@ class DbConnection:
     @retry_on_exception()
     def add_log(self, timestamp: datetime, timestamp_user: datetime, action: str, user: str, ip_address: str,
                 city: str, country: str, proxy: str, description: str) -> None:
-        user_bd = self.session.query(User).filter(f.lower(User.user) == user.lower()).first()
-        if user_bd:
-            user_name = user_bd.user
-        else:
-            user_name = None
+        user_name = None
+        if user:
+            user_bd = self.session.query(User).filter(f.lower(User.user) == user.lower()).first()
+            if user_bd:
+                user_name = user_bd.user
+
         log = Log(timestamp=timestamp,
                   timestamp_user=timestamp_user,
                   action=action,
