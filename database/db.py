@@ -80,10 +80,14 @@ class DbConnection:
     def add_log(self, timestamp: datetime, timestamp_user: datetime, action: str, user: str, ip_address: str,
                 city: str, country: str, proxy: str, description: str) -> None:
         user_bd = self.session.query(User).filter(f.lower(User.user) == user.lower()).first()
+        if user_bd:
+            user_name = user_bd.user
+        else:
+            user_name = None
         log = Log(timestamp=timestamp,
                   timestamp_user=timestamp_user,
                   action=action,
-                  user=user_bd.user,
+                  user=user_name,
                   ip_address=ip_address,
                   city=city,
                   country=country,
