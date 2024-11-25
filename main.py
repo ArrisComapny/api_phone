@@ -5,9 +5,10 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi.middleware import Middleware
 from fastapi import FastAPI, Request, Depends
+from starlette.responses import StreamingResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from config import ALLOWED_IPS
+from config import ALLOWED_IPS, FILE_PATH
 from database.db import DbConnection
 from pydantic_models import LogEntry
 
@@ -83,6 +84,22 @@ async def get_sms(virtual_phone_number: str,
                         time_response=notification_time,
                         message=message,
                         marketplace=marketplace[contact_phone_number])
+
+
+@app.get("/download_app")
+async def get_app():
+    try:
+        def iterfile():
+            with open(FILE_PATH, "rb") as file:
+                while chunk := file.read(1024 * 1024):
+                    yield chunk
+
+        return StreamingResponse(iterfile(),
+                                 media_type="application/zip",
+                                 headers={"Content-Disposition": f"attachment; filename=browser-1.0.1.zip"})
+    except Exception as e:
+        print(f"get_app: {e}")
+        return {"error": "File not found"}
 
 
 @app.post("/log")
