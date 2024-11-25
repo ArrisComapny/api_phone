@@ -92,7 +92,7 @@ class DbConnection:
                   city=city,
                   country=country,
                   proxy=proxy,
-                  description=description)
+                  description=description or '')
 
         self.session.add(log)
         self.session.commit()
