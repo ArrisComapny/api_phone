@@ -7,7 +7,7 @@ class LogEntry(BaseModel):
     timestamp: datetime
     timestamp_user: Optional[datetime] = None
     action: str
-    user: str
+    user: Optional[str] = None
     ip_address: str
     city: str
     country: str
