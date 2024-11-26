@@ -46,3 +46,11 @@ class Log(Base):
     country = Column(String(length=255), nullable=False)
     proxy = Column(String(length=255), nullable=True)
     description = Column(Text, nullable=False)
+
+
+class Version(Base):
+    """Модель таблицы version."""
+    __tablename__ = 'version'
+
+    version = Column(String(length=255), primary_key=True, nullable=False)
+    url = Column(String(length=1000), primary_key=True, nullable=False)

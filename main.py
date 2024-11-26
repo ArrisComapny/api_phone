@@ -87,16 +87,18 @@ async def get_sms(virtual_phone_number: str,
 
 
 @app.get("/download_app")
-async def get_app():
+async def get_app(db_conn: DbConnection = Depends(get_db)):
     try:
+        version = db_conn.get_version()
+
         def iterfile():
-            with open(FILE_PATH, "rb") as file:
+            with open(FILE_PATH + f"browser-{version}.zip", "rb") as file:
                 while chunk := file.read(1024 * 1024):
                     yield chunk
 
         return StreamingResponse(iterfile(),
                                  media_type="application/zip",
-                                 headers={"Content-Disposition": f"attachment; filename=browser-1.0.1.zip"})
+                                 headers={f"Content-Disposition": f"attachment; filename=browser-{version}.zip"})
     except Exception as e:
         print(f"get_app: {e}")
         return {"error": "File not found"}

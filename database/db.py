@@ -59,6 +59,11 @@ class DbConnection:
         self.session = Session(self.engine)
 
     @retry_on_exception()
+    def get_version(self) -> str:
+        version = self.session.query(Version).first()
+        return version.version
+
+    @retry_on_exception()
     def add_message(self, virtual_phone_number: str, time_response: datetime, message: str,
                     marketplace: str = None) -> None:
         if marketplace:
