@@ -72,7 +72,7 @@ class DbConnection:
             PhoneMessage.marketplace == marketplace,
             PhoneMessage.time_response.is_(None),
             PhoneMessage.message.is_(None),
-            PhoneMessage.time_request <= time_response + timedelta(seconds=2),
+            PhoneMessage.time_request <= time_response + timedelta(seconds=5),
             PhoneMessage.time_request >= time_response - timedelta(minutes=2)
         ).order_by(PhoneMessage.time_request.asc()).first()
 
