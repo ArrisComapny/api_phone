@@ -68,17 +68,14 @@ class DbConnection:
                     marketplace: str = None) -> None:
         print(virtual_phone_number, time_response, message, marketplace)
         if marketplace is None:
-            for mp in ['Ozon', 'Yandex']:
-                mes = self.session.query(PhoneMessage).filter(
-                    PhoneMessage.phone == virtual_phone_number,
-                    PhoneMessage.marketplace == mp,
-                    PhoneMessage.time_response.is_(None),
-                    PhoneMessage.message.is_(None),
-                    PhoneMessage.time_request <= time_response + timedelta(seconds=5),
-                    PhoneMessage.time_request >= time_response - timedelta(minutes=2)
-                ).order_by(PhoneMessage.time_request.asc()).first()
-                if mes:
-                    break
+            mes = self.session.query(PhoneMessage).filter(
+                PhoneMessage.phone == virtual_phone_number,
+                PhoneMessage.marketplace.in_(['Ozon', 'Yandex']),
+                PhoneMessage.time_response.is_(None),
+                PhoneMessage.message.is_(None),
+                PhoneMessage.time_request <= time_response + timedelta(seconds=5),
+                PhoneMessage.time_request >= time_response - timedelta(minutes=2)
+            ).order_by(PhoneMessage.time_request.asc()).first()
         else:
             mes = self.session.query(PhoneMessage).filter(
                 PhoneMessage.phone == virtual_phone_number,
