@@ -77,6 +77,10 @@ async def get_sms(virtual_phone_number: str,
 
     if match:
         message = match.group(0)
+    else:
+        match = re.search(r'\b\d{3}-\d{3}\b', message)
+        if match:
+            message = match.group(0).replace('-', '')
 
     marketplace = {'Wildberries': 'WB', 'OZON.ru': 'Ozon', 'Yandex': 'Yandex'}
 
