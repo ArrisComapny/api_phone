@@ -54,8 +54,7 @@ async def get_call(virtual_phone_number: str,
 
     db_conn.add_message(virtual_phone_number=virtual_phone_number,
                         time_response=notification_time,
-                        message=message,
-                        marketplace='Ozon')
+                        message=message)
 
 
 @app.get("/sms")

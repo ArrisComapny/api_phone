@@ -67,14 +67,27 @@ class DbConnection:
     def add_message(self, virtual_phone_number: str, time_response: datetime, message: str,
                     marketplace: str = None) -> None:
         print(virtual_phone_number, time_response, message, marketplace)
-        mes = self.session.query(PhoneMessage).filter(
-            PhoneMessage.phone == virtual_phone_number,
-            PhoneMessage.marketplace == marketplace,
-            PhoneMessage.time_response.is_(None),
-            PhoneMessage.message.is_(None),
-            PhoneMessage.time_request <= time_response + timedelta(seconds=5),
-            PhoneMessage.time_request >= time_response - timedelta(minutes=2)
-        ).order_by(PhoneMessage.time_request.asc()).first()
+        if marketplace is None:
+            for mp in ['Ozon', 'Yandex']:
+                mes = self.session.query(PhoneMessage).filter(
+                    PhoneMessage.phone == virtual_phone_number,
+                    PhoneMessage.marketplace == mp,
+                    PhoneMessage.time_response.is_(None),
+                    PhoneMessage.message.is_(None),
+                    PhoneMessage.time_request <= time_response + timedelta(seconds=5),
+                    PhoneMessage.time_request >= time_response - timedelta(minutes=2)
+                ).order_by(PhoneMessage.time_request.asc()).first()
+                if mes:
+                    break
+        else:
+            mes = self.session.query(PhoneMessage).filter(
+                PhoneMessage.phone == virtual_phone_number,
+                PhoneMessage.marketplace == marketplace,
+                PhoneMessage.time_response.is_(None),
+                PhoneMessage.message.is_(None),
+                PhoneMessage.time_request <= time_response + timedelta(seconds=5),
+                PhoneMessage.time_request >= time_response - timedelta(minutes=2)
+            ).order_by(PhoneMessage.time_request.asc()).first()
 
         print(mes)
         if mes:
