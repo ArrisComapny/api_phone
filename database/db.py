@@ -93,6 +93,7 @@ class DbConnection:
                 mes.message = message
                 self.session.commit()
             else:
+                self.session.expunge(mes)
                 time.sleep(1)
 
     @retry_on_exception()
