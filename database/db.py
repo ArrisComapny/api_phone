@@ -92,6 +92,7 @@ class DbConnection:
                 mes.time_response = time_response
                 mes.message = message
                 self.session.commit()
+                break
             else:
                 time.sleep(1)
 
