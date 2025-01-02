@@ -67,7 +67,7 @@ class DbConnection:
     def add_message(self, virtual_phone_number: str, time_response: datetime, message: str,
                     marketplace: str = None) -> None:
         print(virtual_phone_number, time_response, message, marketplace)
-        for _ in range(3):
+        for _ in range(5):
             if marketplace is None:
                 mes = self.session.query(PhoneMessage).filter(
                     PhoneMessage.phone == virtual_phone_number,
@@ -93,8 +93,7 @@ class DbConnection:
                 mes.message = message
                 self.session.commit()
                 break
-            else:
-                time.sleep(1)
+            time.sleep(1)
 
     @retry_on_exception()
     def add_log(self, timestamp: datetime, timestamp_user: datetime, action: str, user: str, ip_address: str,
