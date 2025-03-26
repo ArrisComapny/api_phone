@@ -2,12 +2,11 @@ import time
 import logging
 
 from functools import wraps
-from datetime import datetime, timedelta
-
 from sqlalchemy.orm import Session
-from sqlalchemy import create_engine, func as f
 from pyodbc import Error as PyodbcError
+from datetime import datetime, timedelta
 from sqlalchemy.exc import OperationalError
+from sqlalchemy import create_engine, func as f
 
 from config import DB_URL
 from database.models import *
@@ -16,6 +15,12 @@ logger = logging.getLogger(__name__)
 
 
 def retry_on_exception(retries=3, delay=10):
+    """
+    Декоратор для повторной попытки выполнения метода при ошибках подключения к БД.
+
+    Повторяет вызов до `retries` раз с задержкой `delay` секунд.
+    Откатывает сессию при каждой неудачной попытке.
+    """
     def decorator(func):
         @wraps(func)
         def wrapper(self, *args, **kwargs):
@@ -43,32 +48,51 @@ def retry_on_exception(retries=3, delay=10):
 
 
 class DbConnection:
+    """
+    Класс для работы с базой данных через SQLAlchemy.
+    Управляет соединением, сессией и предоставляет методы для операций.
+    """
+
     def __init__(self, echo: bool = False) -> None:
-        self.engine = create_engine(url=DB_URL,
-                                    echo=echo,
-                                    pool_size=10,
-                                    max_overflow=5,
-                                    pool_timeout=30,
-                                    pool_recycle=1800,
-                                    pool_pre_ping=True,
-                                    connect_args={"keepalives": 1,
-                                                  "keepalives_idle": 180,
-                                                  "keepalives_interval": 60,
-                                                  "keepalives_count": 20,
-                                                  "connect_timeout": 10})
+        # Создание движка с параметрами пула соединений
+        self.engine = create_engine(
+            url=DB_URL,
+            echo=echo,
+            pool_size=10,
+            max_overflow=5,
+            pool_timeout=30,
+            pool_recycle=1800,
+            pool_pre_ping=True,
+            connect_args={
+                "keepalives": 1,
+                "keepalives_idle": 180,
+                "keepalives_interval": 60,
+                "keepalives_count": 20,
+                "connect_timeout": 10
+            }
+        )
         self.session = Session(self.engine)
 
     @retry_on_exception()
     def get_version(self) -> str:
+        """Получение текущей версии приложения из таблицы `version`"""
+
         version = self.session.query(Version).first()
         return version.version
 
     @retry_on_exception()
     def add_message(self, virtual_phone_number: str, time_response: datetime, message: str,
                     marketplace: str = None) -> None:
-        print(virtual_phone_number, time_response, message, marketplace)
+        """
+        Добавление кода подтверждения SMS в таблицу phone_message.
+
+        Производит поиск по номеру, маркетплейсу и диапазону времени (±2 минуты от time_response),
+        и обновляет соответствующую запись.
+        """
+
         for _ in range(5):
             if marketplace is None:
+                # Поиск по нескольким маркетплейсам, если не указан явно
                 mes = self.session.query(PhoneMessage).filter(
                     PhoneMessage.phone == virtual_phone_number,
                     PhoneMessage.marketplace.in_(['Ozon', 'Yandex']),
@@ -78,6 +102,7 @@ class DbConnection:
                     PhoneMessage.time_request >= time_response - timedelta(minutes=2)
                 ).order_by(PhoneMessage.time_request.asc()).first()
             else:
+                # Поиск по конкретному маркетплейсу
                 mes = self.session.query(PhoneMessage).filter(
                     PhoneMessage.phone == virtual_phone_number,
                     PhoneMessage.marketplace == marketplace,
@@ -87,8 +112,8 @@ class DbConnection:
                     PhoneMessage.time_request >= time_response - timedelta(minutes=2)
                 ).order_by(PhoneMessage.time_request.asc()).first()
 
-            print(mes)
             if mes:
+                # Обновление найденной записи
                 mes.time_response = time_response
                 mes.message = message
                 self.session.commit()
@@ -96,23 +121,40 @@ class DbConnection:
             time.sleep(1)
 
     @retry_on_exception()
-    def add_log(self, timestamp: datetime, timestamp_user: datetime, action: str, user: str, ip_address: str,
-                city: str, country: str, proxy: str, description: str) -> None:
+    def add_log(self,
+                timestamp: datetime,
+                timestamp_user: datetime,
+                action: str,
+                user: str,
+                ip_address: str,
+                city: str,
+                country: str,
+                proxy: str,
+                description: str) -> None:
+        """
+        Добавление записи в лог действий (`log`).
+
+        Проверяет, существует ли пользователь (если передан),
+        и записывает лог с данными по IP, локации, действию и описанием.
+        """
         user_name = None
         if user:
+            # Приведение логина к регистронезависимому виду
             user_bd = self.session.query(User).filter(f.lower(User.user) == user.lower()).first()
             if user_bd:
                 user_name = user_bd.user
 
-        log = Log(timestamp=timestamp,
-                  timestamp_user=timestamp_user,
-                  action=action,
-                  user=user_name,
-                  ip_address=ip_address,
-                  city=city,
-                  country=country,
-                  proxy=proxy,
-                  description=description or '')
+        log = Log(
+            timestamp=timestamp,
+            timestamp_user=timestamp_user,
+            action=action,
+            user=user_name,
+            ip_address=ip_address,
+            city=city,
+            country=country,
+            proxy=proxy,
+            description=description or ''
+        )
 
         self.session.add(log)
         self.session.commit()

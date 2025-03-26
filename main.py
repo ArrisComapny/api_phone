@@ -1,38 +1,43 @@
 import re
 
 from urllib.parse import unquote
-from datetime import datetime, timedelta, timezone
-
 from fastapi.middleware import Middleware
 from fastapi import FastAPI, Request, Depends
 from starlette.responses import StreamingResponse
+from datetime import datetime, timedelta, timezone
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from config import ALLOWED_IPS, FILE_PATH
 from database.db import DbConnection
 from pydantic_models import LogEntry
+from config import ALLOWED_IPS, FILE_PATH
 
+
+# Инициализация подключения к базе данных
 db_connect = DbConnection()
 
 
 class IPFilterMiddleware(BaseHTTPMiddleware):
+    """Мидлвар для фильтрации IP-адресов"""
     def __init__(self, app, allowed_ips: list[str]):
         super().__init__(app)
         self.allowed_ips = allowed_ips
 
     async def dispatch(self, request: Request, call_next):
+        """Получение IP клиента из заголовка или сокета"""
+
         client_ip = request.headers.get("X-Forwarded-For", request.client.host).split(",")[0].strip()
         print(f"Client IP: {client_ip}")
-        # if client_ip not in self.allowed_ips:
-        #     print(f"Access forbidden for IP: {client_ip}")
-        #     raise HTTPException(status_code=403, detail="Access forbidden")
+        # Пока пропускаем всех — логика фильтрации не реализована
         return await call_next(request)
 
 
+# Инициализация FastAPI-приложения с мидлваром
 app = FastAPI(middleware=[Middleware(IPFilterMiddleware, allowed_ips=ALLOWED_IPS)])
 
 
 def get_db():
+    """Зависимость FastAPI — передаёт подключение к БД в хендлеры"""
+
     return db_connect
 
 
@@ -40,21 +45,28 @@ def get_db():
 async def get_call(virtual_phone_number: str,
                    notification_time: str,
                    contact_phone_number: str,
-                   db_conn: DbConnection = Depends(get_db)):
-    virtual_phone_number = re.sub(r'\D', '', virtual_phone_number)
-    virtual_phone_number = virtual_phone_number[-10:]
+                   db_conn: DbConnection = Depends(get_db)) -> None:
+    """Эндпоинт для обработки звонка (без сообщения, код — последние 6 цифр номера)"""
 
+    # Очистка номера от лишних символов, оставляем только 10 цифр
+    virtual_phone_number = re.sub(r'\D', '', virtual_phone_number)[-10:]
+
+    # Преобразование времени уведомления к московскому часовому поясу
     notification_time = datetime.strptime(notification_time, "%Y-%m-%d %H:%M:%S.%f")
     now_time = datetime.now(tz=timezone(timedelta(hours=3))).replace(tzinfo=None)
     hours = round((now_time - notification_time).total_seconds() / 3600)
     notification_time += timedelta(hours=hours)
 
+    # Последние 6 цифр контактного номера используются как "сообщение"
     contact_phone_number = re.sub(r'\D', '', contact_phone_number)
     message = contact_phone_number[-6:]
 
-    db_conn.add_message(virtual_phone_number=virtual_phone_number,
-                        time_response=notification_time,
-                        message=message)
+    # Сохраняем информацию в БД
+    db_conn.add_message(
+        virtual_phone_number=virtual_phone_number,
+        time_response=notification_time,
+        message=message
+    )
 
 
 @app.get("/sms")
@@ -62,18 +74,23 @@ async def get_sms(virtual_phone_number: str,
                   notification_time: str,
                   contact_phone_number: str,
                   message: str,
-                  db_conn: DbConnection = Depends(get_db)):
-    virtual_phone_number = re.sub(r'\D', '', virtual_phone_number)
-    virtual_phone_number = virtual_phone_number[-10:]
+                  db_conn: DbConnection = Depends(get_db)) -> None:
+    """Эндпоинт для обработки СМС с кодом"""
 
+    # Очистка номера от лишних символов, оставляем только 10 цифр
+    virtual_phone_number = re.sub(r'\D', '', virtual_phone_number)[-10:]
+
+    # Преобразование времени уведомления к московскому часовому поясу
     notification_time = datetime.strptime(notification_time, "%Y-%m-%d %H:%M:%S.%f")
     now_time = datetime.now(tz=timezone(timedelta(hours=3))).replace(tzinfo=None)
     hours = round((now_time - notification_time).total_seconds() / 3600)
     notification_time += timedelta(hours=hours)
 
+    # Декодирование URL-сообщения
     message = unquote(message)
-    match = re.search(r'\b\d{6}\b', message)
 
+    # Извлечение кода из текста (ищем 6 цифр или формат XXX-XXX)
+    match = re.search(r'\b\d{6}\b', message)
     if match:
         message = match.group(0)
     else:
@@ -81,33 +98,44 @@ async def get_sms(virtual_phone_number: str,
         if match:
             message = match.group(0).replace('-', '')
 
+    # Сопоставление названия платформы с кодом
     marketplace = {'Wildberries': 'WB', 'OZON.ru': 'Ozon', 'Yandex': 'Yandex'}
 
-    db_conn.add_message(virtual_phone_number=virtual_phone_number,
-                        time_response=notification_time,
-                        message=message,
-                        marketplace=marketplace[contact_phone_number])
+    # Сохраняем информацию в БД
+    db_conn.add_message(
+        virtual_phone_number=virtual_phone_number,
+        time_response=notification_time,
+        message=message,
+        marketplace=marketplace[contact_phone_number]
+    )
 
 
 @app.get("/download_app")
-async def get_app(db_conn: DbConnection = Depends(get_db)):
+async def get_app(db_conn: DbConnection = Depends(get_db)) -> StreamingResponse | dict:
+    """Эндпоинт для скачивания zip-файла приложения браузера"""
+
     try:
         version = db_conn.get_version()
 
+        # Итеративная передача файла по частям
         def iterfile():
             with open(FILE_PATH + f"browser-{version}.zip", "rb") as file:
-                while chunk := file.read(1024 * 1024):
+                while chunk := file.read(1024 * 1024):  # 1 MB
                     yield chunk
 
-        return StreamingResponse(iterfile(),
-                                 media_type="application/zip",
-                                 headers={f"Content-Disposition": f"attachment; filename=browser-{version}.zip"})
+        return StreamingResponse(
+            iterfile(),
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename=browser-{version}.zip"}
+        )
     except Exception as e:
         print(f"get_app: {e}")
         return {"error": "File not found"}
 
 
 @app.post("/log")
-async def get_log(entry: LogEntry, db_conn: DbConnection = Depends(get_db)):
+async def get_log(entry: LogEntry, db_conn: DbConnection = Depends(get_db)) -> dict:
+    """Эндпоинт для логирования событий из клиента"""
+
     db_conn.add_log(**entry.dict())
     return {"status": "success", "message": "Log saved successfully"}

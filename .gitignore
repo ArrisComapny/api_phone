@@ -3,3 +3,6 @@ config.py
 /venv/
 __pycache__/
 *.pyc
+
+/version/*
+!/version/.gitkeep
