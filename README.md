@@ -16,6 +16,15 @@ app_phone/
 ├── database/
 │   ├── db.py                      # Класс работы с базой
 │   └── models.py                  # SQLAlchemy ORM модели
+│ 
+├── docs/
+│   ├── images                     # Папка с изображениями для инструкции
+│   │   ├── call.png
+│   │   ├── call2.png
+│   │   ├── sms.png
+│   │   └── sms2.png
+│   │ 
+│   └── novofon_setup_guide.md     # Настройка уведомлений Novofon
 │  
 ├── version/                       # Папка для хранения версий
 │  
@@ -113,7 +122,7 @@ sudo systemctl start fastapi
 
 ## Как добавить новую версию браузера
 
-1. Собери заранее `.zip` архив: `browser-<VERSION>.zip`
+1. Собери заранее `.zip` архив: `browser-<VERSION>.zip` содержащий новую версию `ProxyBrowser`
 2. Помести его в каталог `FILE_PATH` на сервере
 3. Обнови строку таблицы `version` в базе:
 ```
@@ -127,3 +136,13 @@ LOG_SERVER_URL = "http://<IP>:2613/log"
 ```
 
 ---
+
+## 📎 Дополнительно
+
+📘 Ознакомьтесь с [инструкцией по настройке Novofon API и Telegram уведомлений](docs/novofon_setup_guide.md)
+
+---
+
+## ✅ Готово!
+
+Теперь сервер Ubuntu с API готов для использования с DesktopBrowser
