@@ -111,7 +111,7 @@ async def get_sms(virtual_phone_number: str,
 
 
 @app.get("/download_app")
-async def get_app(db_conn: DbConnection = Depends(get_db)) -> StreamingResponse | dict:
+async def get_app(db_conn: DbConnection = Depends(get_db)):
     """Эндпоинт для скачивания zip-файла приложения браузера"""
 
     try:

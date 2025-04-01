@@ -71,7 +71,7 @@ class Log(Base):
     timestamp_user = Column(DateTime, default=None, nullable=True)
     action = Column(String(length=255), nullable=False)
     user = Column(String(length=255), ForeignKey('users.user'), default=None, nullable=True)
-    ip_address = Column(DateTime, nullable=False)
+    ip_address = Column(String(length=255), nullable=False)
     city = Column(String(length=255), nullable=False)
     country = Column(String(length=255), nullable=False)
     proxy = Column(String(length=255), nullable=True)
