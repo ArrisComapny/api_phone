@@ -13,14 +13,12 @@ class User(Base):
     - user: логин
     - password: пароль
     - name: имя пользователя (опционально)
-    - group: принадлежность к группе (определяет доступные компании)
     """
     __tablename__ = 'users'
 
     user = Column(String(length=255), primary_key=True, nullable=False)
     password = Column(String(length=255), nullable=False)
     name = Column(String(length=255), default=None, nullable=True)
-    group = Column(String(length=255), ForeignKey('group_table.group', onupdate="CASCADE"), nullable=False)
 
 
 class PhoneMessage(Base):
@@ -41,8 +39,8 @@ class PhoneMessage(Base):
 
     id = Column(Integer, Identity(), primary_key=True)
     user = Column(String(length=255), ForeignKey('users.user', onupdate="CASCADE"), nullable=False)
-    phone = Column(String(length=255), ForeignKey('connects.phone', onupdate="CASCADE"), nullable=False)
-    marketplace = Column(String(length=255), ForeignKey('marketplaces.marketplace', onupdate="CASCADE"), nullable=False)
+    phone = Column(String(length=255), nullable=False)
+    marketplace = Column(String(length=255), nullable=False)
     time_request = Column(DateTime, nullable=False)
     time_response = Column(DateTime, default=None, nullable=True)
     message = Column(String(length=255), default=None, nullable=True)
