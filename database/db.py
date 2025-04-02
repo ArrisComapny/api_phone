@@ -90,7 +90,7 @@ class DbConnection:
         и обновляет соответствующую запись.
         """
 
-        for _ in range(5):
+        for _ in range(10):
             if marketplace is None:
                 # Поиск по нескольким маркетплейсам, если не указан явно
                 mes = self.session.query(PhoneMessage).filter(
@@ -118,7 +118,7 @@ class DbConnection:
                 mes.message = message
                 self.session.commit()
                 break
-            time.sleep(1)
+            time.sleep(3)
 
     @retry_on_exception()
     def add_log(self,
