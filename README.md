@@ -125,15 +125,15 @@ sudo systemctl start fastapi
 1. Собери заранее `.zip` архив: `browser-<VERSION>.zip` содержащий новую версию `ProxyBrowser`
 2. Помести его в каталог `FILE_PATH` на сервере
 3. Обнови строку таблицы `version` в базе:
-```
-version = <VERSION>
-url = 'http://<IP>:2613/download_app'
-```
+    ```
+    version = <VERSION>
+    url = 'http://<IP>:2613/download_app'
+    ```
 4. При запуске клиент сам получит обновление.
 5. В проекте `DesktopBrowser` обновите файл `config.py`:
-```python
-LOG_SERVER_URL = "http://<IP>:2613/log"
-```
+    ```python
+    LOG_SERVER_URL = "http://<IP>:2613/log"
+    ```
 
 ---
 
