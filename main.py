@@ -3,9 +3,9 @@ import re
 from urllib.parse import unquote
 from fastapi.middleware import Middleware
 from fastapi import FastAPI, Request, Depends
-from starlette.responses import StreamingResponse
 from datetime import datetime, timedelta, timezone
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import StreamingResponse, JSONResponse
 
 from database.db import DbConnection
 from pydantic_models import LogEntry
@@ -45,27 +45,35 @@ def get_db():
 async def get_call(virtual_phone_number: str,
                    notification_time: str,
                    contact_phone_number: str,
-                   db_conn: DbConnection = Depends(get_db)) -> None:
+                   db_conn: DbConnection = Depends(get_db)) -> JSONResponse:
     """Эндпоинт для обработки звонка (без сообщения, код — последние 6 цифр номера)"""
+    try:
+        # Очистка номера от лишних символов, оставляем только 10 цифр
+        virtual_phone_number = re.sub(r'\D', '', virtual_phone_number)[-10:]
 
-    # Очистка номера от лишних символов, оставляем только 10 цифр
-    virtual_phone_number = re.sub(r'\D', '', virtual_phone_number)[-10:]
+        # Преобразование времени уведомления к московскому часовому поясу
+        notification_time = datetime.strptime(notification_time, "%Y-%m-%d %H:%M:%S.%f")
+        now_time = datetime.now(tz=timezone(timedelta(hours=3))).replace(tzinfo=None)
+        hours = round((now_time - notification_time).total_seconds() / 3600)
+        notification_time += timedelta(hours=hours)
 
-    # Преобразование времени уведомления к московскому часовому поясу
-    notification_time = datetime.strptime(notification_time, "%Y-%m-%d %H:%M:%S.%f")
-    now_time = datetime.now(tz=timezone(timedelta(hours=3))).replace(tzinfo=None)
-    hours = round((now_time - notification_time).total_seconds() / 3600)
-    notification_time += timedelta(hours=hours)
+        # Последние 6 цифр контактного номера используются как "сообщение"
+        contact_phone_number = re.sub(r'\D', '', contact_phone_number)
+        message = contact_phone_number[-6:]
 
-    # Последние 6 цифр контактного номера используются как "сообщение"
-    contact_phone_number = re.sub(r'\D', '', contact_phone_number)
-    message = contact_phone_number[-6:]
-
-    # Сохраняем информацию в БД
-    db_conn.add_message(
-        virtual_phone_number=virtual_phone_number,
-        time_response=notification_time,
-        message=message
+        # Сохраняем информацию в БД
+        db_conn.add_message(
+            virtual_phone_number=virtual_phone_number,
+            time_response=notification_time,
+            message=message
+        )
+        details = "Сообщение получено"
+    except Exception as e:
+        details = f"Ошибка сообщения: {str(e)}"
+    return JSONResponse(
+        status_code=200,
+        content={"status": "ok", "details": details},
+        headers={"X-Custom-Header": "some-value"}
     )
 
 
@@ -74,39 +82,47 @@ async def get_sms(virtual_phone_number: str,
                   notification_time: str,
                   contact_phone_number: str,
                   message: str,
-                  db_conn: DbConnection = Depends(get_db)) -> None:
+                  db_conn: DbConnection = Depends(get_db)) -> JSONResponse:
     """Эндпоинт для обработки СМС с кодом"""
+    try:
+        # Очистка номера от лишних символов, оставляем только 10 цифр
+        virtual_phone_number = re.sub(r'\D', '', virtual_phone_number)[-10:]
 
-    # Очистка номера от лишних символов, оставляем только 10 цифр
-    virtual_phone_number = re.sub(r'\D', '', virtual_phone_number)[-10:]
+        # Преобразование времени уведомления к московскому часовому поясу
+        notification_time = datetime.strptime(notification_time, "%Y-%m-%d %H:%M:%S.%f")
+        now_time = datetime.now(tz=timezone(timedelta(hours=3))).replace(tzinfo=None)
+        hours = round((now_time - notification_time).total_seconds() / 3600)
+        notification_time += timedelta(hours=hours)
 
-    # Преобразование времени уведомления к московскому часовому поясу
-    notification_time = datetime.strptime(notification_time, "%Y-%m-%d %H:%M:%S.%f")
-    now_time = datetime.now(tz=timezone(timedelta(hours=3))).replace(tzinfo=None)
-    hours = round((now_time - notification_time).total_seconds() / 3600)
-    notification_time += timedelta(hours=hours)
+        # Декодирование URL-сообщения
+        message = unquote(message)
 
-    # Декодирование URL-сообщения
-    message = unquote(message)
-
-    # Извлечение кода из текста (ищем 6 цифр или формат XXX-XXX)
-    match = re.search(r'\b\d{6}\b', message)
-    if match:
-        message = match.group(0)
-    else:
-        match = re.search(r'\b\d{3}-\d{3}\b', message)
+        # Извлечение кода из текста (ищем 6 цифр или формат XXX-XXX)
+        match = re.search(r'\b\d{6}\b', message)
         if match:
-            message = match.group(0).replace('-', '')
+            message = match.group(0)
+        else:
+            match = re.search(r'\b\d{3}-\d{3}\b', message)
+            if match:
+                message = match.group(0).replace('-', '')
 
-    # Сопоставление названия платформы с кодом
-    marketplace = {'Wildberries': 'WB', 'OZON.ru': 'Ozon', 'Yandex': 'Yandex'}
+        # Сопоставление названия платформы с кодом
+        marketplace = {'Wildberries': 'WB', 'OZON.ru': 'Ozon', 'Yandex': 'Yandex'}
 
-    # Сохраняем информацию в БД
-    db_conn.add_message(
-        virtual_phone_number=virtual_phone_number,
-        time_response=notification_time,
-        message=message,
-        marketplace=marketplace[contact_phone_number]
+        # Сохраняем информацию в БД
+        db_conn.add_message(
+            virtual_phone_number=virtual_phone_number,
+            time_response=notification_time,
+            message=message,
+            marketplace=marketplace[contact_phone_number]
+        )
+        details = "Сообщение получено"
+    except Exception as e:
+        details = f"Ошибка сообщения: {str(e)}"
+    return JSONResponse(
+        status_code=200,
+        content={"status": "ok", "details": details},
+        headers={"X-Custom-Header": "some-value"}
     )
 
 
