@@ -164,22 +164,22 @@ async def get_mts(request: Request) -> JSONResponse:
     try:
         content = ""
         if request.headers.get("content-type", "").startswith("application/json"):
-            body = await request.json()
-            content = json.dumps(body, ensure_ascii=False, indent=2)
-        else:
-            # форма или query
-            form = {}
+            try:
+                content = await request.json()
+            except Exception:
+                content = {}
+
+        # если form-data
+        if not content:
             try:
                 form = await request.form()
+                content = dict(form)
             except Exception:
-                pass
-            if form:
-                content = json.dumps(dict(form), ensure_ascii=False, indent=2)
-            else:
-                content = json.dumps(dict(request.query_params), ensure_ascii=False, indent=2)
+                content = {}
 
+        # если query
         if not content:
-            content = "(пустой запрос)"
+            content = dict(request.query_params)
 
         api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         payload = {"chat_id": str(TELEGRAM_CHAT_ID), "text": content}
