@@ -162,29 +162,32 @@ async def get_log(entry: LogEntry, db_conn: DbConnection = Depends(get_db)) -> d
 async def get_mts(request: Request) -> JSONResponse:
     """Эндпоинт для получения смс на виртуальные номера MTS"""
     try:
-        content = ""
-        if request.headers.get("content-type", "").startswith("application/json"):
-            try:
-                content = await request.json()
-            except Exception:
-                content = {}
+        # content = ""
+        # if request.headers.get("content-type", "").startswith("application/json"):
+        #     try:
+        #         content = await request.json()
+        #     except Exception:
+        #         content = {}
+        #
+        # # если form-data
+        # if not content:
+        #     try:
+        #         form = await request.form()
+        #         content = {k: v for k, v in form.items()}
+        #     except Exception:
+        #         content = {}
+        #
+        # # если query
+        # if not content:
+        #     content = dict(request.query_params)
 
-        # если form-data
-        if not content:
-            try:
-                form = await request.form()
-                content = {k: v for k, v in form.items()}
-            except Exception:
-                content = {}
+        body_bytes = await request.body()
+        body_text = body_bytes.decode("utf-8", errors="ignore")
 
-        # если query
-        if not content:
-            content = dict(request.query_params)
-
-        text = json.dumps(content, ensure_ascii=False, indent=2)
+        # text = json.dumps(content, ensure_ascii=False, indent=2)
 
         api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        payload = {"chat_id": str(TELEGRAM_CHAT_ID), "text": text}
+        payload = {"chat_id": str(TELEGRAM_CHAT_ID), "text": body_text}
         async with httpx.AsyncClient() as client:
             await client.post(api, data=payload)
 
