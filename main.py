@@ -173,7 +173,7 @@ async def get_mts(request: Request) -> JSONResponse:
         if not content:
             try:
                 form = await request.form()
-                content = dict(form)
+                content = {k: v for k, v in form.items()}
             except Exception:
                 content = {}
 
@@ -181,8 +181,10 @@ async def get_mts(request: Request) -> JSONResponse:
         if not content:
             content = dict(request.query_params)
 
+        text = json.dumps(content, ensure_ascii=False, indent=2)
+
         api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        payload = {"chat_id": str(TELEGRAM_CHAT_ID), "text": content}
+        payload = {"chat_id": str(TELEGRAM_CHAT_ID), "text": text}
         async with httpx.AsyncClient() as client:
             await client.post(api, data=payload)
 
