@@ -162,32 +162,33 @@ async def get_log(entry: LogEntry, db_conn: DbConnection = Depends(get_db)) -> d
 async def get_mts(request: Request) -> JSONResponse:
     """Эндпоинт для получения смс на виртуальные номера MTS"""
     try:
-        # content = ""
-        # if request.headers.get("content-type", "").startswith("application/json"):
-        #     try:
-        #         content = await request.json()
-        #     except Exception:
-        #         content = {}
-        #
-        # # если form-data
-        # if not content:
-        #     try:
-        #         form = await request.form()
-        #         content = {k: v for k, v in form.items()}
-        #     except Exception:
-        #         content = {}
-        #
-        # # если query
-        # if not content:
-        #     content = dict(request.query_params)
+        body = {}
+        raw = "Пустое сообщение"
 
-        body_bytes = await request.body()
-        body_text = body_bytes.decode("utf-8", errors="ignore")
+        if request.headers.get("content-type", "").startswith("application/json"):
+            try:
+                body = await request.json()
+            except:
+                body = {}
 
-        # text = json.dumps(content, ensure_ascii=False, indent=2)
+        # 2) multipart/form-data (формы) — работает при установленном python-multipart
+        if not body:
+            try:
+                form = await request.form()
+                body = {k: (v.filename if hasattr(v, "filename") else str(v)) for k, v in form.items()}
+            except:
+                body = {}
+
+        # 3) query как запасной вариант
+        if not body:
+            body = dict(request.query_params)
+
+        if not body:
+            raw = (await request.body()).decode("utf-8", "ignore")
+            return JSONResponse({"status": "ok", "raw": True})
 
         api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        payload = {"chat_id": str(TELEGRAM_CHAT_ID), "text": body_text}
+        payload = {"chat_id": str(TELEGRAM_CHAT_ID), "text": body or raw}
         async with httpx.AsyncClient() as client:
             await client.post(api, data=payload)
 
