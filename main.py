@@ -1,16 +1,17 @@
 import re
+import json
+import httpx
 
 from urllib.parse import unquote
 from fastapi.middleware import Middleware
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Request, Depends, HTTPException
 from datetime import datetime, timedelta, timezone
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import StreamingResponse, JSONResponse
 
 from database.db import DbConnection
 from pydantic_models import LogEntry
-from config import ALLOWED_IPS, FILE_PATH
-
+from config import ALLOWED_IPS, FILE_PATH, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 
 # Инициализация подключения к базе данных
 db_connect = DbConnection()
@@ -155,3 +156,36 @@ async def get_log(entry: LogEntry, db_conn: DbConnection = Depends(get_db)) -> d
 
     db_conn.add_log(**entry.dict())
     return {"status": "success", "message": "Log saved successfully"}
+
+
+@app.post("/mts")
+async def get_mts(request: Request) -> JSONResponse:
+    """Эндпоинт для получения смс на виртуальные номера MTS"""
+    try:
+        content = ""
+        if request.headers.get("content-type", "").startswith("application/json"):
+            body = await request.json()
+            content = json.dumps(body, ensure_ascii=False, indent=2)
+        else:
+            # форма или query
+            form = {}
+            try:
+                form = await request.form()
+            except Exception:
+                pass
+            if form:
+                content = json.dumps(dict(form), ensure_ascii=False, indent=2)
+            else:
+                content = json.dumps(dict(request.query_params), ensure_ascii=False, indent=2)
+
+        if not content:
+            content = "(пустой запрос)"
+
+        api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {"chat_id": str(TELEGRAM_CHAT_ID), "text": content}
+        async with httpx.AsyncClient() as client:
+            await client.post(api, data=payload)
+
+        return JSONResponse(status_code=200, content={"status": "ok"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"status": "error", "details": str(e)})
