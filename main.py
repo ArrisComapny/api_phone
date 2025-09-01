@@ -1,6 +1,8 @@
 import re
 import json
+import time
 import httpx
+import requests
 
 from urllib.parse import unquote
 from fastapi.middleware import Middleware
@@ -16,9 +18,28 @@ from config import ALLOWED_IPS, FILE_PATH, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 # Инициализация подключения к базе данных
 db_connect = DbConnection()
 
+URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+
+
+def request_telegram(mes: str, disable_notification: bool = False):
+    response = requests.post(URL, data={"chat_id": TELEGRAM_CHAT_ID,
+                                        "text": mes,
+                                        "parse_mode": "Markdown",
+                                        "disable_web_page_preview": True,
+                                        "disable_notification": disable_notification})
+    for _ in range(3):
+        if response.status_code == 200:
+            break
+        else:
+            time.sleep(20)
+    else:
+        print(f"Неудалось отправить сообщение: {mes}")
+        print(f"Ошибка {response.status_code}")
+
 
 class IPFilterMiddleware(BaseHTTPMiddleware):
     """Мидлвар для фильтрации IP-адресов"""
+
     def __init__(self, app, allowed_ips: list[str]):
         super().__init__(app)
         self.allowed_ips = allowed_ips
@@ -158,44 +179,58 @@ async def get_log(entry: LogEntry, db_conn: DbConnection = Depends(get_db)) -> d
     return {"status": "success", "message": "Log saved successfully"}
 
 
+# @app.post("/mts")
+# async def get_mts(request: Request) -> JSONResponse:
+#     """Эндпоинт для получения смс на виртуальные номера MTS"""
+#     try:
+#         body = {}
+#         raw = "Пустое сообщение"
+#
+#         if request.headers.get("content-type", "").startswith("application/json"):
+#
+#             try:
+#                 body = await request.json()
+#                 print(f'body: {body}')
+#             except:
+#                 body = {}
+#
+#         # 2) multipart/form-data (формы) — работает при установленном python-multipart
+#         if not body:
+#             try:
+#                 form = await request.form()
+#                 body = {k: (v.filename if hasattr(v, "filename") else str(v)) for k, v in form.items()}
+#                 print(f'form: {body}')
+#             except:
+#                 body = {}
+#
+#         # 3) query как запасной вариант
+#         if not body:
+#             body = dict(request.query_params)
+#             print(f'query: {body}')
+#
+#         if not body:
+#             raw = (await request.body()).decode("utf-8", "ignore")
+#             print(f'raw: {raw}')
+#
+#         api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+#         payload = {"chat_id": str(TELEGRAM_CHAT_ID), "text": body or raw}
+#         async with httpx.AsyncClient() as client:
+#             await client.post(api, data=payload)
+#
+#         return JSONResponse(status_code=200, content={"status": "ok"})
+#     except Exception as e:
+#         return JSONResponse(status_code=500, content={"status": "error", "details": str(e)})
+
+
 @app.post("/mts")
-async def get_mts(request: Request) -> JSONResponse:
-    """Эндпоинт для получения смс на виртуальные номера MTS"""
+async def get_mts(text: str, sender: str, receiver: str, **kwargs) -> JSONResponse:
     try:
-        body = {}
-        raw = "Пустое сообщение"
-
-        if request.headers.get("content-type", "").startswith("application/json"):
-
-            try:
-                body = await request.json()
-                print(f'body: {body}')
-            except:
-                body = {}
-
-        # 2) multipart/form-data (формы) — работает при установленном python-multipart
-        if not body:
-            try:
-                form = await request.form()
-                body = {k: (v.filename if hasattr(v, "filename") else str(v)) for k, v in form.items()}
-                print(f'form: {body}')
-            except:
-                body = {}
-
-        # 3) query как запасной вариант
-        if not body:
-            body = dict(request.query_params)
-            print(f'query: {body}')
-
-        if not body:
-            raw = (await request.body()).decode("utf-8", "ignore")
-            print(f'raw: {raw}')
-
-        api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        payload = {"chat_id": str(TELEGRAM_CHAT_ID), "text": body or raw}
-        async with httpx.AsyncClient() as client:
-            await client.post(api, data=payload)
+        request_telegram(f"*На номер:* {receiver}\n"
+                         f"*От:* {sender}\n\n"
+                         f"*Сообщение:*\n"
+                         f"{text}")
 
         return JSONResponse(status_code=200, content={"status": "ok"})
     except Exception as e:
+        request_telegram(f'Ошибка: {str(e)}')
         return JSONResponse(status_code=500, content={"status": "error", "details": str(e)})
