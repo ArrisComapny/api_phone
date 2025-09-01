@@ -166,8 +166,10 @@ async def get_mts(request: Request) -> JSONResponse:
         raw = "Пустое сообщение"
 
         if request.headers.get("content-type", "").startswith("application/json"):
+
             try:
                 body = await request.json()
+                print(f'body: {body}')
             except:
                 body = {}
 
@@ -176,15 +178,18 @@ async def get_mts(request: Request) -> JSONResponse:
             try:
                 form = await request.form()
                 body = {k: (v.filename if hasattr(v, "filename") else str(v)) for k, v in form.items()}
+                print(f'form: {body}')
             except:
                 body = {}
 
         # 3) query как запасной вариант
         if not body:
             body = dict(request.query_params)
+            print(f'query: {body}')
 
         if not body:
             raw = (await request.body()).decode("utf-8", "ignore")
+            print(f'raw: {raw}')
 
         api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         payload = {"chat_id": str(TELEGRAM_CHAT_ID), "text": body or raw}
