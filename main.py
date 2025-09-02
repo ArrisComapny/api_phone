@@ -19,7 +19,7 @@ from config import ALLOWED_IPS, FILE_PATH, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 # Инициализация подключения к базе данных
 db_connect = DbConnection()
 
-MDV2_SPECIALS = r'[_\[\]()~`>#+\=|{}!]'
+MDV2_SPECIALS = r'[_\[\]()~`>#+\=|{}]'
 
 
 class MTSMessage(BaseModel):
