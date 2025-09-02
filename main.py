@@ -29,11 +29,15 @@ class MTSMessage(BaseModel):
 async def request_telegram(mes: str, disable_notification: bool = False):
     api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     async with httpx.AsyncClient() as client:
-        await client.post(api, data={"chat_id": str(TELEGRAM_CHAT_ID),
-                                     "text": mes,
-                                     "parse_mode": "Markdown",
-                                     "disable_web_page_preview": True,
-                                     "disable_notification": disable_notification})
+        r = await client.post(api, data={"chat_id": str(TELEGRAM_CHAT_ID),
+                                         "text": mes,
+                                         "parse_mode": "Markdown",
+                                         "disable_web_page_preview": True,
+                                         "disable_notification": disable_notification})
+
+        if r.status_code != 200:
+            raise RuntimeError(f"Telegram 400: {r.text}")
+        print(r.json())
 
 
 class IPFilterMiddleware(BaseHTTPMiddleware):
@@ -189,7 +193,6 @@ async def get_mts(request: Request) -> JSONResponse:
 
             try:
                 body = await request.json()
-                print(f'body: {body}')
             except:
                 body = {}
 
@@ -198,14 +201,12 @@ async def get_mts(request: Request) -> JSONResponse:
             try:
                 form = await request.form()
                 body = {k: (v.filename if hasattr(v, "filename") else str(v)) for k, v in form.items()}
-                print(f'form: {body}')
             except:
                 body = {}
 
         # 3) query как запасной вариант
         if not body:
             body = dict(request.query_params)
-            print(f'query: {body}')
 
         if not body:
             raw = (await request.body()).decode("utf-8", "ignore")
