@@ -19,7 +19,7 @@ from config import ALLOWED_IPS, FILE_PATH, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 # Инициализация подключения к базе данных
 db_connect = DbConnection()
 
-MDV2_SPECIALS = r'[_*\[\]()~`>#+\-=|{}.!]'
+MDV2_SPECIALS = r'[_\[\]()~`>#+\=|{}.!]'
 
 
 class MTSMessage(BaseModel):
@@ -33,19 +33,20 @@ def escape_mdv2(text: str) -> str:
 
 
 async def request_telegram(mes: str, disable_notification: bool = False):
-    mes = escape_mdv2(mes)
-    print(mes)
+    mes2 = escape_mdv2(mes)
+
     api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     async with httpx.AsyncClient() as client:
         r = await client.post(api, data={"chat_id": str(TELEGRAM_CHAT_ID),
-                                         "text": mes,
+                                         "text": mes2,
                                          "parse_mode": "Markdown",
-                                         "disable_web_page_preview": True,
-                                         "disable_notification": disable_notification})
-
+                                         "disable_web_page_preview": True})
+        if r.status_code != 200:
+            r = await client.post(api, data={"chat_id": str(TELEGRAM_CHAT_ID),
+                                             "text": mes,
+                                             "disable_web_page_preview": True})
         if r.status_code != 200:
             raise RuntimeError(f"Telegram 400: {r.text}")
-        print(r.json())
 
 
 class IPFilterMiddleware(BaseHTTPMiddleware):
@@ -225,6 +226,7 @@ async def get_mts(request: Request) -> JSONResponse:
                                        f"*От:* {msg.sender}\n\n"
                                        f"*Сообщение:*\n"
                                        f"{msg.text}")
+                return JSONResponse(status_code=200, content={"status": "ok"})
             except Exception as e:
                 print(f'{str(e)}')
 
@@ -236,16 +238,3 @@ async def get_mts(request: Request) -> JSONResponse:
         return JSONResponse(status_code=200, content={"status": "ok"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "error", "details": str(e)})
-
-# @app.post("/mts")
-# async def get_mts(msg: MTSMessage) -> JSONResponse:
-#     try:
-#         request_telegram(f"*На номер:* {msg.receiver}\n"
-#                          f"*От:* {msg.sender}\n\n"
-#                          f"*Сообщение:*\n"
-#                          f"{msg.text}")
-#
-#         return JSONResponse(status_code=200, content={"status": "ok"})
-#     except Exception as e:
-#         request_telegram(f'Ошибка: {str(e)}')
-#         return JSONResponse(status_code=500, content={"status": "error", "details": str(e)})
