@@ -27,6 +27,7 @@ class MTSMessage(BaseModel):
 
 
 async def request_telegram(mes: str, disable_notification: bool = False):
+    print(mes)
     api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     async with httpx.AsyncClient() as client:
         r = await client.post(api, data={"chat_id": str(TELEGRAM_CHAT_ID),
