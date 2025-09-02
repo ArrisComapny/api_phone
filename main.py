@@ -216,9 +216,16 @@ async def get_mts(request: Request) -> JSONResponse:
             print(f'query: {body}')
 
         if not body:
-            r = await request.body()
             raw = (await request.body()).decode("utf-8", "ignore")
-            print(f'r: {type(r)}\nraw: {type(raw)}')
+            try:
+                data = json.loads(raw)
+                msg = MTSMessage(**{k: data[k] for k in ["text", "sender", "receiver"]})
+                request_telegram(f"*На номер:* {msg.receiver}\n"
+                                 f"*От:* {msg.sender}\n\n"
+                                 f"*Сообщение:*\n"
+                                 f"{msg.text}")
+            except Exception as e:
+                print(f'{str(e)}')
 
         api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         payload = {"chat_id": str(TELEGRAM_CHAT_ID), "text": body or raw}
