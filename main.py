@@ -19,8 +19,6 @@ from config import ALLOWED_IPS, FILE_PATH, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 # Инициализация подключения к базе данных
 db_connect = DbConnection()
 
-URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-
 
 class MTSMessage(BaseModel):
     text: str
@@ -28,20 +26,14 @@ class MTSMessage(BaseModel):
     receiver: str
 
 
-def request_telegram(mes: str, disable_notification: bool = False):
-    response = requests.post(URL, data={"chat_id": TELEGRAM_CHAT_ID,
-                                        "text": mes,
-                                        "parse_mode": "Markdown",
-                                        "disable_web_page_preview": True,
-                                        "disable_notification": disable_notification})
-    for _ in range(3):
-        if response.status_code == 200:
-            break
-        else:
-            time.sleep(20)
-    else:
-        print(f"Неудалось отправить сообщение: {mes}")
-        print(f"Ошибка {response.status_code}")
+async def request_telegram(mes: str, disable_notification: bool = False):
+    api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    async with httpx.AsyncClient() as client:
+        await client.post(api, data={"chat_id": str(TELEGRAM_CHAT_ID),
+                                     "text": mes,
+                                     "parse_mode": "Markdown",
+                                     "disable_web_page_preview": True,
+                                     "disable_notification": disable_notification})
 
 
 class IPFilterMiddleware(BaseHTTPMiddleware):
@@ -220,10 +212,10 @@ async def get_mts(request: Request) -> JSONResponse:
             try:
                 data = json.loads(raw)
                 msg = MTSMessage(**{k: data[k] for k in ["text", "sender", "receiver"]})
-                request_telegram(f"*На номер:* {msg.receiver}\n"
-                                 f"*От:* {msg.sender}\n\n"
-                                 f"*Сообщение:*\n"
-                                 f"{msg.text}")
+                await request_telegram(f"*На номер:* {msg.receiver}\n"
+                                       f"*От:* {msg.sender}\n\n"
+                                       f"*Сообщение:*\n"
+                                       f"{msg.text}")
             except Exception as e:
                 print(f'{str(e)}')
 
@@ -235,7 +227,6 @@ async def get_mts(request: Request) -> JSONResponse:
         return JSONResponse(status_code=200, content={"status": "ok"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "error", "details": str(e)})
-
 
 # @app.post("/mts")
 # async def get_mts(msg: MTSMessage) -> JSONResponse:
