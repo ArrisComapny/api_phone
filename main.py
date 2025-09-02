@@ -19,6 +19,8 @@ from config import ALLOWED_IPS, FILE_PATH, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 # Инициализация подключения к базе данных
 db_connect = DbConnection()
 
+MDV2_SPECIALS = r'[_*\[\]()~`>#+\-=|{}.!]'
+
 
 class MTSMessage(BaseModel):
     text: str
@@ -26,7 +28,12 @@ class MTSMessage(BaseModel):
     receiver: str
 
 
+def escape_mdv2(text: str) -> str:
+    return re.sub(MDV2_SPECIALS, lambda m: '\\' + m.group(0), text)
+
+
 async def request_telegram(mes: str, disable_notification: bool = False):
+    mes = escape_mdv2(mes)
     print(mes)
     api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     async with httpx.AsyncClient() as client:
