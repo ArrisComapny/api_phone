@@ -216,8 +216,9 @@ async def get_mts(request: Request) -> JSONResponse:
             print(f'query: {body}')
 
         if not body:
+            r = await request.body()
             raw = (await request.body()).decode("utf-8", "ignore")
-            print(f'raw: {raw}')
+            print(f'r: {type(r)}\nraw: {type(raw)}')
 
         api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         payload = {"chat_id": str(TELEGRAM_CHAT_ID), "text": body or raw}
