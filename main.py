@@ -1,8 +1,9 @@
+
 import re
 import json
 import time
 import httpx
-import requests
+import asyncio
 
 from pydantic import BaseModel
 from urllib.parse import unquote
@@ -37,16 +38,20 @@ async def request_telegram(mes: str, disable_notification: bool = False):
 
     api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     async with httpx.AsyncClient() as client:
-        r = await client.post(api, data={"chat_id": str(TELEGRAM_CHAT_ID),
-                                         "text": mes2,
-                                         "parse_mode": "Markdown",
-                                         "disable_web_page_preview": True})
-        if r.status_code != 200:
+        for _ in range(3):
+            r = await client.post(api, data={"chat_id": str(TELEGRAM_CHAT_ID),
+                                             "text": mes2,
+                                             "parse_mode": "Markdown",
+                                             "disable_web_page_preview": True})
+            if r.status_code == 200:
+                break
+            await asyncio.sleep(3)
+        else:
             r = await client.post(api, data={"chat_id": str(TELEGRAM_CHAT_ID),
                                              "text": mes,
                                              "disable_web_page_preview": True})
-        if r.status_code != 200:
-            raise RuntimeError(f"Telegram 400: {r.text}")
+            if r.status_code != 200:
+                raise RuntimeError(f"Telegram 400: {r.text}")
 
 
 class IPFilterMiddleware(BaseHTTPMiddleware):
