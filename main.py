@@ -227,10 +227,11 @@ async def get_mts(request: Request) -> JSONResponse:
             try:
                 data = json.loads(raw)
                 msg = MTSMessage(**{k: data[k] for k in ["text", "sender", "receiver"]})
+                text = msg.text.replace('*', '\\*')
                 await request_telegram(f"*На номер:* {msg.receiver}\n"
                                        f"*От:* {msg.sender}\n\n"
                                        f"*Сообщение:*\n"
-                                       f"{msg.text}")
+                                       f"{text}")
                 return JSONResponse(status_code=200, content={"status": "ok"})
             except Exception as e:
                 print(f'{str(e)}')
