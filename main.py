@@ -36,8 +36,8 @@ def escape_mdv2(text: str) -> str:
 async def request_telegram(mes: str, db_conn: DbConnection):
     mes2 = escape_mdv2(mes)
 
-    async def reg(tg_id: str = TELEGRAM_BOT_TOKEN):
-        api = f"https://api.telegram.org/bot{tg_id}/sendMessage"
+    async def reg(tg_id: str = TELEGRAM_CHAT_ID):
+        api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         async with httpx.AsyncClient() as client:
             for _ in range(3):
                 r = await client.post(api, data={"chat_id": str(tg_id),
