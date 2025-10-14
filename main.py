@@ -15,12 +15,12 @@ from starlette.responses import StreamingResponse, JSONResponse
 
 from database.db import DbConnection
 from pydantic_models import LogEntry
-from config import ALLOWED_IPS, FILE_PATH, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+from config import ALLOWED_IPS, FILE_PATH, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, ADMIN_TG_ID
 
 # Инициализация подключения к базе данных
 db_connect = DbConnection()
 
-MDV2_SPECIALS = r'[_\[\]()~`>#+\=|{}]'
+MDV2_SPECIALS = r'[_\[\]()~`>#+\|{}]'
 
 
 class MTSMessage(BaseModel):
@@ -33,25 +33,43 @@ def escape_mdv2(text: str) -> str:
     return re.sub(MDV2_SPECIALS, lambda m: '\\' + m.group(0), text)
 
 
-async def request_telegram(mes: str, disable_notification: bool = False):
+async def request_telegram(mes: str, db_conn: DbConnection):
     mes2 = escape_mdv2(mes)
 
-    api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    async with httpx.AsyncClient() as client:
-        for _ in range(3):
-            r = await client.post(api, data={"chat_id": str(TELEGRAM_CHAT_ID),
-                                             "text": mes2,
-                                             "parse_mode": "Markdown",
-                                             "disable_web_page_preview": True})
-            if r.status_code == 200:
-                break
-            await asyncio.sleep(3)
-        else:
-            r = await client.post(api, data={"chat_id": str(TELEGRAM_CHAT_ID),
-                                             "text": mes,
-                                             "disable_web_page_preview": True})
-            if r.status_code != 200:
-                raise RuntimeError(f"Telegram 400: {r.text}")
+    async def reg(tg_id: str = TELEGRAM_BOT_TOKEN):
+        api = f"https://api.telegram.org/bot{tg_id}/sendMessage"
+        async with httpx.AsyncClient() as client:
+            for _ in range(3):
+                r = await client.post(api, data={"chat_id": str(tg_id),
+                                                 "text": mes2,
+                                                 "parse_mode": "Markdown",
+                                                 "disable_web_page_preview": True})
+                if r.status_code == 200:
+                    break
+                await asyncio.sleep(3)
+            else:
+                r = await client.post(api, data={"chat_id": str(tg_id),
+                                                 "text": mes,
+                                                 "disable_web_page_preview": True})
+                if r.status_code != 200:
+                    raise RuntimeError(f"Telegram 400: {r.text}")
+
+    phone = mes2.split('\n')[1].split()[-1]
+
+    tg_ids = db_conn.get_tg_id(phone)
+
+    if tg_ids is None:
+        for tg in ADMIN_TG_ID:
+            await reg(tg)
+    elif not tg_ids:
+        await reg()
+    else:
+        for tg in tg_ids:
+            try:
+                await reg(tg)
+            except:
+                for tg2 in ADMIN_TG_ID:
+                    await reg(tg2)
 
 
 class IPFilterMiddleware(BaseHTTPMiddleware):
@@ -197,7 +215,7 @@ async def get_log(entry: LogEntry, db_conn: DbConnection = Depends(get_db)) -> d
 
 
 @app.post("/mts")
-async def get_mts(request: Request) -> JSONResponse:
+async def get_mts(request: Request, db_conn: DbConnection = Depends(get_db)) -> JSONResponse:
     """Эндпоинт для получения смс на виртуальные номера MTS"""
     try:
         body = {}
@@ -231,7 +249,8 @@ async def get_mts(request: Request) -> JSONResponse:
                 await request_telegram(f"*На номер:* {msg.receiver}\n"
                                        f"*От:* {msg.sender}\n\n"
                                        f"*Сообщение:*\n"
-                                       f"{text}")
+                                       f"{text}",
+                                       db_conn=db_conn)
                 return JSONResponse(status_code=200, content={"status": "ok"})
             except Exception as e:
                 print(f'{str(e)}')

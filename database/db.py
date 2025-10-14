@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from pyodbc import Error as PyodbcError
 from datetime import datetime, timedelta
 from sqlalchemy.exc import OperationalError
-from sqlalchemy import create_engine, func as f
+from sqlalchemy import create_engine, func as f, select
 
 from config import DB_URL
 from database.models import *
@@ -79,6 +79,25 @@ class DbConnection:
 
         version = self.session.query(Version).first()
         return version.version
+
+    @retry_on_exception()
+    def get_tg_id(self, phone: str) -> list[str] | None:
+        """Получение списка id Telegram для отправки сообщений из таблицы `employee_mtsnumbers`"""
+
+        tg_ids = []
+
+        try:
+            stmt = (select(EmployeeNumber.employee_id)
+                    .join(Employee, Employee.tg_user_id == EmployeeNumber.employee_id)
+                    .where(EmployeeNumber.phone == phone, Employee.status == "works").distinct())
+
+            result = self.session.execute(stmt).all()
+
+            if result:
+                tg_ids = [e.employee_id for e in result]
+            return tg_ids
+        except:
+            return None
 
     @retry_on_exception()
     def add_message(self, virtual_phone_number: str, time_response: datetime, message: str,
