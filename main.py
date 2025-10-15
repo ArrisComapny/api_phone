@@ -54,7 +54,7 @@ async def request_telegram(mes: str, db_conn: DbConnection):
                 if r.status_code != 200:
                     raise RuntimeError(f"Telegram 400: {r.text}")
 
-    phone = mes2.split('\n')[1].split()[-1]
+    phone = mes2.split('\n')[0].split()[-1]
 
     tg_ids = db_conn.get_tg_id(phone)
 
