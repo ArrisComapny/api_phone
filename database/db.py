@@ -53,25 +53,8 @@ class DbConnection:
     Управляет соединением, сессией и предоставляет методы для операций.
     """
 
-    def __init__(self, echo: bool = False) -> None:
-        # Создание движка с параметрами пула соединений
-        self.engine = create_engine(
-            url=DB_URL,
-            echo=echo,
-            pool_size=10,
-            max_overflow=5,
-            pool_timeout=30,
-            pool_recycle=600,
-            pool_pre_ping=True,
-            connect_args={
-                "keepalives": 1,
-                "keepalives_idle": 30,
-                "keepalives_interval": 10,
-                "keepalives_count": 5,
-                "connect_timeout": 10
-            }
-        )
-        self.session = Session(self.engine)
+    def __init__(self, session: Session):
+        self.session = session
 
     @retry_on_exception()
     def get_version(self) -> str:

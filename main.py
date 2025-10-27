@@ -1,4 +1,3 @@
-
 import re
 import json
 import time
@@ -8,17 +7,19 @@ import asyncio
 from pydantic import BaseModel
 from urllib.parse import unquote
 from fastapi.middleware import Middleware
-from fastapi import FastAPI, Request, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from datetime import datetime, timedelta, timezone
 from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi import FastAPI, Request, Depends, HTTPException
 from starlette.responses import StreamingResponse, JSONResponse
 
 from database.db import DbConnection
 from pydantic_models import LogEntry
+from database.bootstrap import SessionLocal
 from config import ALLOWED_IPS, FILE_PATH, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, ADMIN_TG_ID
 
 # Инициализация подключения к базе данных
-db_connect = DbConnection()
+# db_connect = DbConnection()
 
 MDV2_SPECIALS = r'[_\[\]()~`>#+\|{}]'
 
@@ -56,7 +57,7 @@ async def request_telegram(mes: str, db_conn: DbConnection):
 
     phone = mes2.split('\n')[0].split()[-1]
 
-    tg_ids = db_conn.get_tg_id(phone)
+    tg_ids = await run_in_threadpool(db_conn.get_tg_id, phone)
 
     if tg_ids is None:
         for tg in ADMIN_TG_ID:
@@ -92,10 +93,13 @@ class IPFilterMiddleware(BaseHTTPMiddleware):
 app = FastAPI(middleware=[Middleware(IPFilterMiddleware, allowed_ips=ALLOWED_IPS)])
 
 
-def get_db():
-    """Зависимость FastAPI — передаёт подключение к БД в хендлеры"""
-
-    return db_connect
+async def get_db():
+    session = SessionLocal()
+    db = DbConnection(session)
+    try:
+        yield db
+    finally:
+        session.close()
 
 
 @app.get("/call")
@@ -119,11 +123,10 @@ async def get_call(virtual_phone_number: str,
         message = contact_phone_number[-6:]
 
         # Сохраняем информацию в БД
-        db_conn.add_message(
-            virtual_phone_number=virtual_phone_number,
-            time_response=notification_time,
-            message=message
-        )
+        await run_in_threadpool(db_conn.add_message,
+                                virtual_phone_number=virtual_phone_number,
+                                time_response=notification_time,
+                                message=message)
         details = "Сообщение получено"
     except Exception as e:
         details = f"Ошибка сообщения: {str(e)}"
@@ -167,12 +170,11 @@ async def get_sms(virtual_phone_number: str,
         marketplace = {'Wildberries': 'WB', 'OZON.ru': 'Ozon', 'Yandex': 'Yandex'}
 
         # Сохраняем информацию в БД
-        db_conn.add_message(
-            virtual_phone_number=virtual_phone_number,
-            time_response=notification_time,
-            message=message,
-            marketplace=marketplace[contact_phone_number]
-        )
+        await run_in_threadpool(db_conn.add_message,
+                                virtual_phone_number=virtual_phone_number,
+                                time_response=notification_time,
+                                message=message,
+                                marketplace=marketplace[contact_phone_number])
         details = "Сообщение получено"
     except Exception as e:
         details = f"Ошибка сообщения: {str(e)}"
@@ -188,7 +190,7 @@ async def get_app(db_conn: DbConnection = Depends(get_db)):
     """Эндпоинт для скачивания zip-файла приложения браузера"""
 
     try:
-        version = db_conn.get_version()
+        version = await run_in_threadpool(db_conn.get_version)
 
         # Итеративная передача файла по частям
         def iterfile():
@@ -210,7 +212,7 @@ async def get_app(db_conn: DbConnection = Depends(get_db)):
 async def get_log(entry: LogEntry, db_conn: DbConnection = Depends(get_db)) -> dict:
     """Эндпоинт для логирования событий из клиента"""
 
-    db_conn.add_log(**entry.dict())
+    await run_in_threadpool(db_conn.add_log, **entry.dict())
     return {"status": "success", "message": "Log saved successfully"}
 
 
