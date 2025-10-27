@@ -39,21 +39,30 @@ async def request_telegram(mes: str, db_conn: DbConnection):
 
     async def reg(tg_id: str = TELEGRAM_CHAT_ID):
         api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        async with httpx.AsyncClient() as client:
+
+        timeout = httpx.Timeout(10.0, connect=5.0)
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
             for _ in range(3):
-                r = await client.post(api, data={"chat_id": str(tg_id),
-                                                 "text": mes2,
-                                                 "parse_mode": "Markdown",
-                                                 "disable_web_page_preview": True})
-                if r.status_code == 200:
-                    break
+                try:
+                    r = await client.post(api, data={"chat_id": str(tg_id),
+                                                     "text": mes2,
+                                                     "parse_mode": "Markdown",
+                                                     "disable_web_page_preview": True})
+                    if r.status_code == 200:
+                        break
+                except httpx.RequestError as e:
+                    print(f"⚠️ Ошибка запроса к Telegram: {e}")
                 await asyncio.sleep(3)
             else:
-                r = await client.post(api, data={"chat_id": str(tg_id),
-                                                 "text": mes,
-                                                 "disable_web_page_preview": True})
-                if r.status_code != 200:
-                    raise RuntimeError(f"Telegram 400: {r.text}")
+                try:
+                    r = await client.post(api, data={"chat_id": str(tg_id),
+                                                     "text": mes,
+                                                     "disable_web_page_preview": True})
+                    if r.status_code != 200:
+                        raise RuntimeError(f"Telegram 400: {r.text}")
+                except httpx.RequestError as e:
+                    print(f"⚠️ Ошибка запроса к Telegram: {e}")
 
     phone = mes2.split('\n')[0].split()[-1]
 
