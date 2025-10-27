@@ -120,3 +120,4 @@ class MTSNumber(Base):
 
     employee_links = relationship("EmployeeNumber", back_populates="mts_number", cascade="all, delete-orphan", passive_deletes=True)
     employees = relationship("Employee", secondary="employee_mtsnumbers", viewonly=True)
+    

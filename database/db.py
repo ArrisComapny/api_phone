@@ -65,9 +65,9 @@ class DbConnection:
             pool_pre_ping=True,
             connect_args={
                 "keepalives": 1,
-                "keepalives_idle": 180,
-                "keepalives_interval": 60,
-                "keepalives_count": 20,
+                "keepalives_idle": 30,
+                "keepalives_interval": 10,
+                "keepalives_count": 5,
                 "connect_timeout": 10
             }
         )
