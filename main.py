@@ -47,7 +47,7 @@ async def request_telegram(mes: str, db_conn: DbConnection):
                 try:
                     r = await client.post(api, data={"chat_id": str(tg_id),
                                                      "text": mes2,
-                                                     "parse_mode": "Markdown",
+                                                     "parse_mode": "MarkdownV2",
                                                      "disable_web_page_preview": True})
                     if r.status_code == 200:
                         break
