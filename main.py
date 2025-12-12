@@ -111,6 +111,11 @@ async def get_db():
         session.close()
 
 
+@app.get("/myip")
+async def get_ip(request: Request):
+    return {"ip": request.client.host}
+
+
 @app.get("/call")
 async def get_call(virtual_phone_number: str,
                    notification_time: str,
