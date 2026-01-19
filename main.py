@@ -275,6 +275,7 @@ async def get_mts(request: Request,
                                        f"*Сообщение:*\n"
                                        f"{text}",
                                        db_conn=db_conn)
+                print(msg.sender, msg.receiver, msg.text)
                 if msg.sender == 'Wildberries':
                     code = ""
                     match = re.search(r'\b\d{6}\b', msg.text)
