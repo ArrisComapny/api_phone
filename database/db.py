@@ -21,6 +21,7 @@ def retry_on_exception(retries=3, delay=10):
     Повторяет вызов до `retries` раз с задержкой `delay` секунд.
     Откатывает сессию при каждой неудачной попытке.
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(self, *args, **kwargs):
@@ -159,4 +160,19 @@ class DbConnection:
         )
 
         self.session.add(log)
+        self.session.commit()
+
+    @retry_on_exception()
+    def add_code(self, virtual_phone_number: str, time_response: datetime, code: str) -> None:
+        """
+        Добавление кода подтверждения SMS в таблицу phone_message.
+
+        Производит поиск по номеру, маркетплейсу и диапазону времени (±2 минуты от time_response),
+        и обновляет соответствующую запись.
+        """
+
+        code = PhoneCode(phone=virtual_phone_number,
+                         time_response=time_response,
+                         code=code)
+        self.session.add(code)
         self.session.commit()

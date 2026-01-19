@@ -120,4 +120,12 @@ class MTSNumber(Base):
 
     employee_links = relationship("EmployeeNumber", back_populates="mts_number", cascade="all, delete-orphan", passive_deletes=True)
     employees = relationship("Employee", secondary="employee_mtsnumbers", viewonly=True)
-    
+
+
+class PhoneCode(Base):
+    __tablename__ = 'phone_code'
+
+    id = Column(Integer, Identity(), primary_key=True)
+    phone = Column(String(length=255), nullable=False)
+    time_response = Column(DateTime, default=None, nullable=True)
+    code = Column(String(length=255), default=None, nullable=True)

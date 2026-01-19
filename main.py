@@ -15,11 +15,8 @@ from starlette.responses import StreamingResponse, JSONResponse
 
 from database.db import DbConnection
 from pydantic_models import LogEntry
-from database.bootstrap import SessionLocal
+from database.bootstrap import SessionLocal, SessionLocal2
 from config import ALLOWED_IPS, FILE_PATH, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, ADMIN_TG_ID
-
-# Инициализация подключения к базе данных
-# db_connect = DbConnection()
 
 MDV2_SPECIALS = r'[_\[\]()~`>#+\|{}]'
 
@@ -104,6 +101,15 @@ app = FastAPI(middleware=[Middleware(IPFilterMiddleware, allowed_ips=ALLOWED_IPS
 
 async def get_db():
     session = SessionLocal()
+    db = DbConnection(session)
+    try:
+        yield db
+    finally:
+        session.close()
+
+
+async def get_db2():
+    session = SessionLocal2()
     db = DbConnection(session)
     try:
         yield db
@@ -231,7 +237,9 @@ async def get_log(entry: LogEntry, db_conn: DbConnection = Depends(get_db)) -> d
 
 
 @app.post("/mts")
-async def get_mts(request: Request, db_conn: DbConnection = Depends(get_db)) -> JSONResponse:
+async def get_mts(request: Request,
+                  db_conn: DbConnection = Depends(get_db),
+                  db_conn2: DbConnection = Depends(get_db2)) -> JSONResponse:
     """Эндпоинт для получения смс на виртуальные номера MTS"""
     try:
         body = {}
@@ -267,6 +275,18 @@ async def get_mts(request: Request, db_conn: DbConnection = Depends(get_db)) -> 
                                        f"*Сообщение:*\n"
                                        f"{text}",
                                        db_conn=db_conn)
+                if msg.sender == 'Wildberries':
+                    code = ""
+                    match = re.search(r'\b\d{6}\b', msg.text)
+                    if match:
+                        code = match.group(0)
+                    else:
+                        match = re.search(r'\b\d{3}-\d{3}\b', msg.text)
+                        if match:
+                            code = match.group(0).replace('-', '')
+                    if code:
+                        db_conn2.add_code(virtual_phone_number=msg.receiver, time_response=datetime.now(), code=code)
+
                 return JSONResponse(status_code=200, content={"status": "ok"})
             except Exception as e:
                 print(f'{str(e)}')
