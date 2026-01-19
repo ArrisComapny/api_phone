@@ -278,6 +278,7 @@ async def get_mts(request: Request,
                 print(msg.sender, msg.receiver, msg.text)
                 if msg.sender == 'Wildberries':
                     code = ""
+                    phone = msg.receiver[1:]
                     match = re.search(r'\b\d{6}\b', msg.text)
                     if match:
                         code = match.group(0)
@@ -286,7 +287,7 @@ async def get_mts(request: Request,
                         if match:
                             code = match.group(0).replace('-', '')
                     if code:
-                        db_conn2.add_code(virtual_phone_number=msg.receiver, time_response=datetime.now(), code=code)
+                        db_conn2.add_code(virtual_phone_number=phone, time_response=datetime.now(), code=code)
 
                 return JSONResponse(status_code=200, content={"status": "ok"})
             except Exception as e:
