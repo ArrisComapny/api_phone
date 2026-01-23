@@ -40,7 +40,7 @@ async def request_telegram(mes: str, db_conn: DbConnection):
         timeout = httpx.Timeout(10.0, connect=5.0)
 
         async with httpx.AsyncClient(timeout=timeout) as client:
-            for _ in range(3):
+            for _ in range(1):
                 try:
                     r = await client.post(api, data={"chat_id": str(tg_id),
                                                      "text": mes2,
@@ -57,15 +57,13 @@ async def request_telegram(mes: str, db_conn: DbConnection):
                                                      "text": mes,
                                                      "disable_web_page_preview": True})
                     if r.status_code != 200:
-                        raise RuntimeError(f"Telegram 400: {r.text}")
+                        print(f"Telegram 400: {r.text}")
                 except httpx.RequestError as e:
                     print(f"⚠️ Ошибка запроса к Telegram: {e}")
 
     phone = mes2.split('\n')[0].split()[-1]
 
     tg_ids = await run_in_threadpool(db_conn.get_tg_id, phone)
-
-    print(phone, tg_ids)
 
     error = False
 
@@ -83,13 +81,13 @@ async def request_telegram(mes: str, db_conn: DbConnection):
                 await reg(tg)
             except:
                 error = True
-
-    if error:
-        for tg2 in ADMIN_TG_ID:
-            try:
-                await reg(tg2)
-            except:
-                pass
+    #
+    # if error:
+    #     for tg2 in ADMIN_TG_ID:
+    #         try:
+    #             await reg(tg2)
+    #         except:
+    #             pass
 
 
 class IPFilterMiddleware(BaseHTTPMiddleware):
