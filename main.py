@@ -65,6 +65,8 @@ async def request_telegram(mes: str, db_conn: DbConnection):
 
     tg_ids = await run_in_threadpool(db_conn.get_tg_id, phone)
 
+    error = False
+
     if tg_ids is None:
         for tg in ADMIN_TG_ID:
             await reg(tg)
@@ -75,8 +77,11 @@ async def request_telegram(mes: str, db_conn: DbConnection):
             try:
                 await reg(tg)
             except:
-                for tg2 in ADMIN_TG_ID:
-                    await reg(tg2)
+                error = True
+
+    if error:
+        for tg2 in ADMIN_TG_ID:
+            await reg(tg2)
 
 
 class IPFilterMiddleware(BaseHTTPMiddleware):
