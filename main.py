@@ -46,7 +46,7 @@ async def request_telegram(mes: str, db_conn: DbConnection):
                                                      "text": mes2,
                                                      "parse_mode": "Markdown",
                                                      "disable_web_page_preview": True})
-                    print(r.status_code, tg_id, mes2)
+                    # print(r.status_code, tg_id, mes2)
                     if r.status_code == 200:
                         break
                 except httpx.RequestError as e:
