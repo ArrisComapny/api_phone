@@ -46,7 +46,6 @@ async def request_telegram(mes: str, db_conn: DbConnection):
                                                      "text": mes2,
                                                      "parse_mode": "Markdown",
                                                      "disable_web_page_preview": True})
-                    # print(r.status_code, tg_id, mes2)
                     if r.status_code == 200:
                         break
                 except httpx.RequestError as e:
@@ -63,6 +62,13 @@ async def request_telegram(mes: str, db_conn: DbConnection):
                     print(f"⚠️ Ошибка запроса к Telegram: {e}")
 
     phone = mes2.split('\n')[0].split()[-1]
+
+    if phone == '79340060237':
+        try:
+            await reg('7796462930')
+        except:
+            pass
+        return
 
     tg_ids = await run_in_threadpool(db_conn.get_tg_id, phone)
 
