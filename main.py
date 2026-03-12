@@ -34,32 +34,38 @@ def escape_mdv2(text: str) -> str:
 async def request_telegram(mes: str, db_conn: DbConnection):
     mes2 = escape_mdv2(mes)
 
-    async def reg(tg_id: str = TELEGRAM_CHAT_ID):
+    async def reg(tg_id: str = None):
         api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
 
         timeout = httpx.Timeout(10.0, connect=5.0)
 
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            for _ in range(1):
-                try:
-                    r = await client.post(api, data={"chat_id": str(tg_id),
-                                                     "text": mes2,
-                                                     "parse_mode": "Markdown",
-                                                     "disable_web_page_preview": True})
-                    if r.status_code == 200:
-                        break
-                except httpx.RequestError as e:
-                    print(f"⚠️ Ошибка запроса к Telegram: {e}")
-                await asyncio.sleep(3)
-            else:
-                try:
-                    r = await client.post(api, data={"chat_id": str(tg_id),
-                                                     "text": mes,
-                                                     "disable_web_page_preview": True})
-                    if r.status_code != 200:
-                        print(f"Telegram 400: {r.text}")
-                except httpx.RequestError as e:
-                    print(f"⚠️ Ошибка запроса к Telegram: {e}")
+        if tg_id is None:
+            tg_id = TELEGRAM_CHAT_ID
+        else:
+            tg_id = [tg_id]
+
+        for id_tg in tg_id:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                for _ in range(1):
+                    try:
+                        r = await client.post(api, data={"chat_id": str(id_tg),
+                                                         "text": mes2,
+                                                         "parse_mode": "Markdown",
+                                                         "disable_web_page_preview": True})
+                        if r.status_code == 200:
+                            break
+                    except httpx.RequestError as e:
+                        print(f"⚠️ Ошибка запроса к Telegram: {e}")
+                    await asyncio.sleep(3)
+                else:
+                    try:
+                        r = await client.post(api, data={"chat_id": str(id_tg),
+                                                         "text": mes,
+                                                         "disable_web_page_preview": True})
+                        if r.status_code != 200:
+                            print(f"Telegram 400: {r.text}")
+                    except httpx.RequestError as e:
+                        print(f"⚠️ Ошибка запроса к Telegram: {e}")
 
     phone = mes2.split('\n')[0].split()[-1]
 
@@ -71,8 +77,6 @@ async def request_telegram(mes: str, db_conn: DbConnection):
         return
 
     tg_ids = await run_in_threadpool(db_conn.get_tg_id, phone)
-
-    error = False
 
     if tg_ids is None:
         for tg in ADMIN_TG_ID:
@@ -87,14 +91,7 @@ async def request_telegram(mes: str, db_conn: DbConnection):
             try:
                 await reg(tg)
             except:
-                error = True
-    #
-    # if error:
-    #     for tg2 in ADMIN_TG_ID:
-    #         try:
-    #             await reg(tg2)
-    #         except:
-    #             pass
+                pass
 
 
 class IPFilterMiddleware(BaseHTTPMiddleware):
