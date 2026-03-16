@@ -16,7 +16,7 @@ from starlette.responses import StreamingResponse, JSONResponse
 from database.db import DbConnection
 from pydantic_models import LogEntry
 from database.bootstrap import SessionLocal, SessionLocal2
-from config import ALLOWED_IPS, FILE_PATH, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, ADMIN_TG_ID
+from config import ALLOWED_IPS, FILE_PATH, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, ADMIN_TG_ID, PROXY
 
 MDV2_SPECIALS = r'[_\[\]()~`>#+\|{}]'
 
@@ -45,7 +45,7 @@ async def request_telegram(mes: str, db_conn: DbConnection):
             tg_id = [tg_id]
 
         for id_tg in tg_id:
-            async with httpx.AsyncClient(timeout=timeout) as client:
+            async with httpx.AsyncClient(proxy=PROXY, timeout=timeout) as client:
                 for _ in range(1):
                     try:
                         r = await client.post(api, data={"chat_id": str(id_tg),
