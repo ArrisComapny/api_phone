@@ -16,7 +16,8 @@ from starlette.responses import StreamingResponse, JSONResponse
 from database.db import DbConnection
 from pydantic_models import LogEntry
 from database.bootstrap import SessionLocal, SessionLocal2
-from config import ALLOWED_IPS, FILE_PATH, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, ADMIN_TG_ID, PROXY
+from config import ALLOWED_IPS, FILE_PATH, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, ADMIN_TG_ID, PROXY, NOVOFON_BOT_TOKEN, \
+    NOVOFON_CHAT_ID
 
 MDV2_SPECIALS = r'[_\[\]()~`>#+\|{}]'
 
@@ -29,6 +30,35 @@ class MTSMessage(BaseModel):
 
 def escape_mdv2(text: str) -> str:
     return re.sub(MDV2_SPECIALS, lambda m: '\\' + m.group(0), text)
+
+
+async def request_telegram2(mes: str):
+    mes2 = escape_mdv2(mes)
+    api = f"https://api.telegram.org/bot{NOVOFON_BOT_TOKEN}/sendMessage"
+
+    timeout = httpx.Timeout(10.0, connect=5.0)
+
+    async with httpx.AsyncClient(proxy=PROXY, timeout=timeout) as client:
+        for _ in range(1):
+            try:
+                r = await client.post(api, data={"chat_id": NOVOFON_CHAT_ID,
+                                                 "text": mes2,
+                                                 "parse_mode": "Markdown",
+                                                 "disable_web_page_preview": True})
+                if r.status_code == 200:
+                    break
+            except httpx.RequestError as e:
+                print(f"⚠️ Ошибка запроса к Telegram: {e}")
+            await asyncio.sleep(3)
+        else:
+            try:
+                r = await client.post(api, data={"chat_id": NOVOFON_CHAT_ID,
+                                                 "text": mes,
+                                                 "disable_web_page_preview": True})
+                if r.status_code != 200:
+                    print(f"Telegram 400: {r.text}")
+            except httpx.RequestError as e:
+                print(f"⚠️ Ошибка запроса к Telegram: {e}")
 
 
 async def request_telegram(mes: str, db_conn: DbConnection):
@@ -144,6 +174,8 @@ async def get_call(virtual_phone_number: str,
                    db_conn: DbConnection = Depends(get_db)) -> JSONResponse:
     """Эндпоинт для обработки звонка (без сообщения, код — последние 6 цифр номера)"""
     try:
+        text = ""
+
         # Очистка номера от лишних символов, оставляем только 10 цифр
         virtual_phone_number = re.sub(r'\D', '', virtual_phone_number)[-10:]
 
@@ -152,6 +184,14 @@ async def get_call(virtual_phone_number: str,
         now_time = datetime.now(tz=timezone(timedelta(hours=3))).replace(tzinfo=None)
         hours = round((now_time - notification_time).total_seconds() / 3600)
         notification_time += timedelta(hours=hours)
+
+        text += f"В {notification_time} на ваш номер 7{virtual_phone_number} поступил звонок.\n"
+        text += f"Номер с которого поступил вызов: {contact_phone_number}"
+
+        try:
+            await request_telegram2(text)
+        except:
+            pass
 
         # Последние 6 цифр контактного номера используются как "сообщение"
         contact_phone_number = re.sub(r'\D', '', contact_phone_number)
@@ -180,6 +220,8 @@ async def get_sms(virtual_phone_number: str,
                   db_conn: DbConnection = Depends(get_db)) -> JSONResponse:
     """Эндпоинт для обработки СМС с кодом"""
     try:
+        text = ""
+
         # Очистка номера от лишних символов, оставляем только 10 цифр
         virtual_phone_number = re.sub(r'\D', '', virtual_phone_number)[-10:]
 
@@ -189,8 +231,17 @@ async def get_sms(virtual_phone_number: str,
         hours = round((now_time - notification_time).total_seconds() / 3600)
         notification_time += timedelta(hours=hours)
 
+        text += f"В {notification_time} на ваш номер 7{virtual_phone_number} пришло сообщение от {contact_phone_number}.\n"
+        text += f"Текст сообщения:\n"
+
         # Декодирование URL-сообщения
         message = unquote(message)
+        text += f"{message}"
+
+        try:
+            await request_telegram2(text)
+        except:
+            pass
 
         # Извлечение кода из текста (ищем 6 цифр или формат XXX-XXX)
         match = re.search(r'\b\d{6}\b', message)
