@@ -185,7 +185,7 @@ async def get_call(virtual_phone_number: str,
         hours = round((now_time - notification_time).total_seconds() / 3600)
         notification_time += timedelta(hours=hours)
 
-        text += f"В {notification_time} на ваш номер 7{virtual_phone_number} поступил звонок.\n"
+        text += f"В {str(notification_time).split('.')[0]} на ваш номер 7{virtual_phone_number} поступил звонок.\n"
         text += f"Номер с которого поступил вызов: {contact_phone_number}"
 
         try:
@@ -231,7 +231,8 @@ async def get_sms(virtual_phone_number: str,
         hours = round((now_time - notification_time).total_seconds() / 3600)
         notification_time += timedelta(hours=hours)
 
-        text += f"В {notification_time} на ваш номер 7{virtual_phone_number} пришло сообщение от {contact_phone_number}.\n"
+        text += f"В {str(notification_time).split('.')[0]} "
+        text += f"на ваш номер 7{virtual_phone_number} пришло сообщение от {contact_phone_number}.\n"
         text += f"Текст сообщения:\n"
 
         # Декодирование URL-сообщения
