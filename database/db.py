@@ -98,7 +98,7 @@ class DbConnection:
                 # Поиск по нескольким маркетплейсам, если не указан явно
                 mes = self.session.query(PhoneMessage).filter(
                     PhoneMessage.phone == virtual_phone_number,
-                    PhoneMessage.marketplace.in_(['Ozon', 'Yandex']),
+                    PhoneMessage.marketplace.in_(['Ozon', 'Yandex', 'МВидео']),
                     PhoneMessage.time_response.is_(None),
                     PhoneMessage.message.is_(None),
                     PhoneMessage.time_request <= time_response + timedelta(seconds=5),
