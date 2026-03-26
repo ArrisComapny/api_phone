@@ -254,7 +254,7 @@ async def get_sms(virtual_phone_number: str,
                 message = match.group(0).replace('-', '')
 
         # Сопоставление названия платформы с кодом
-        marketplace = {'Wildberries': 'WB', 'OZON.ru': 'Ozon', 'Yandex': 'Yandex'}
+        marketplace = {'Wildberries': 'WB', 'OZON.ru': 'Ozon', 'Yandex': 'Yandex', 'M.Video': 'МВидео'}
 
         # Сохраняем информацию в БД
         await run_in_threadpool(db_conn.add_message,
