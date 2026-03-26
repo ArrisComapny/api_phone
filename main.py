@@ -244,14 +244,17 @@ async def get_sms(virtual_phone_number: str,
         except:
             pass
 
-        # Извлечение кода из текста (ищем 6 цифр или формат XXX-XXX)
-        match = re.search(r'\b\d{6}\b', message)
-        if match:
-            message = match.group(0)
-        else:
-            match = re.search(r'\b\d{3}-\d{3}\b', message)
+        patterns = [
+            (r'\b\d{6}\b', lambda s: s),
+            (r'\b\d{3}-\d{3}\b', lambda s: s.replace('-', '')),
+            (r'\b\d{4}\b', lambda s: s),
+        ]
+
+        for pattern, transform in patterns:
+            match = re.search(pattern, message)
             if match:
-                message = match.group(0).replace('-', '')
+                message = transform(match.group(0))
+                break
 
         # Сопоставление названия платформы с кодом
         marketplace = {'Wildberries': 'WB', 'OZON.ru': 'Ozon', 'Yandex': 'Yandex', 'M.Video': 'МВидео'}
