@@ -315,6 +315,8 @@ async def get_mts(request: Request,
         body = {}
         raw = "Пустое сообщение"
 
+        notification_time = datetime.now(tz=timezone(timedelta(hours=3))).replace(tzinfo=None)
+
         if request.headers.get("content-type", "").startswith("application/json"):
 
             try:
@@ -346,7 +348,24 @@ async def get_mts(request: Request,
                                        f"{text}",
                                        db_conn=db_conn)
                 print(msg.sender, msg.receiver, msg.text)
-                if msg.sender == 'Wildberries':
+                if msg.receiver[1:] == '9393276833':
+                    if msg.sender == 'Wildberries':
+                        code = ""
+                        phone = msg.receiver[1:]
+                        match = re.search(r'\b\d{6}\b', msg.text)
+                        if match:
+                            code = match.group(0)
+                        else:
+                            match = re.search(r'\b\d{3}-\d{3}\b', msg.text)
+                            if match:
+                                code = match.group(0).replace('-', '')
+                        if code:
+                            await run_in_threadpool(db_conn.add_message,
+                                                    virtual_phone_number=phone,
+                                                    time_response=notification_time,
+                                                    message=code,
+                                                    marketplace='WB')
+                elif msg.sender == 'Wildberries':
                     code = ""
                     phone = msg.receiver[1:]
                     match = re.search(r'\b\d{6}\b', msg.text)
