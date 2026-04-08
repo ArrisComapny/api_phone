@@ -314,6 +314,7 @@ async def get_mts(request: Request,
     try:
         body = {}
         raw = "Пустое сообщение"
+        msg = None
 
         notification_time = datetime.now(tz=timezone(timedelta(hours=3))).replace(tzinfo=None)
 
@@ -321,7 +322,7 @@ async def get_mts(request: Request,
 
             try:
                 body = await request.json()
-                print(f"json: {body}")
+                msg = MTSMessage(**{k: body[k] for k in ["text", "sender", "receiver"]})
             except:
                 body = {}
 
@@ -340,10 +341,15 @@ async def get_mts(request: Request,
             print(f"dict: {body}")
 
         if not body:
-            raw = (await request.body()).decode("utf-8", "ignore")
             try:
+                raw = (await request.body()).decode("utf-8", "ignore")
                 data = json.loads(raw)
                 msg = MTSMessage(**{k: data[k] for k in ["text", "sender", "receiver"]})
+            except:
+                body = {}
+
+        if msg:
+            try:
                 text = msg.text.replace('*', '\\*')
                 await request_telegram(f"*На номер:* {msg.receiver}\n"
                                        f"*От:* {msg.sender}\n\n"
@@ -379,7 +385,7 @@ async def get_mts(request: Request,
                         if match:
                             code = match.group(0).replace('-', '')
                     if code:
-                        db_conn2.add_code(virtual_phone_number=phone, time_response=datetime.now(), code=code)
+                        db_conn2.add_code(virtual_phone_number=phone, time_response=notification_time, code=code)
 
                 return JSONResponse(status_code=200, content={"status": "ok"})
             except Exception as e:
