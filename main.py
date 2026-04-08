@@ -321,6 +321,7 @@ async def get_mts(request: Request,
 
             try:
                 body = await request.json()
+                print(f"json: {body}")
             except:
                 body = {}
 
@@ -329,12 +330,14 @@ async def get_mts(request: Request,
             try:
                 form = await request.form()
                 body = {k: (v.filename if hasattr(v, "filename") else str(v)) for k, v in form.items()}
+                print(f"form: {body}")
             except:
                 body = {}
 
         # 3) query как запасной вариант
         if not body:
             body = dict(request.query_params)
+            print(f"dict: {body}")
 
         if not body:
             raw = (await request.body()).decode("utf-8", "ignore")
