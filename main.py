@@ -357,7 +357,7 @@ async def get_mts(request: Request,
                                        f"{text}",
                                        db_conn=db_conn)
                 print(msg.sender, msg.receiver, msg.text)
-                if msg.receiver[1:] == '9393276833':
+                if msg.receiver[1:] in ('9393276833', '9681978744'):
                     if msg.sender == 'Wildberries':
                         code = ""
                         phone = msg.receiver[1:]
