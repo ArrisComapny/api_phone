@@ -28,6 +28,25 @@ class MTSMessage(BaseModel):
     receiver: str
 
 
+# Дедуп: одинаковые сообщения в пределах окна считаем повтором и не обрабатываем повторно
+DEDUP_WINDOW = 300  # секунд (5 минут)
+_recent_messages: dict[str, float] = {}
+
+
+def is_duplicate_message(msg: MTSMessage) -> bool:
+    """True, если такое же сообщение (номер + отправитель + текст) уже приходило за последние DEDUP_WINDOW секунд."""
+    now = time.time()
+    key = f"{msg.receiver}|{msg.sender}|{msg.text}"
+
+    # чистим устаревшие ключи, чтобы словарь не разрастался
+    for old_key in [k for k, t in _recent_messages.items() if now - t > DEDUP_WINDOW]:
+        del _recent_messages[old_key]
+
+    last = _recent_messages.get(key)
+    _recent_messages[key] = now  # запоминаем/продлеваем время последнего появления (скользящее окно)
+    return last is not None and now - last <= DEDUP_WINDOW
+
+
 def escape_mdv2(text: str) -> str:
     return re.sub(MDV2_SPECIALS, lambda m: '\\' + m.group(0), text)
 
@@ -349,6 +368,10 @@ async def get_mts(request: Request,
                 body = {}
 
         if msg:
+            if is_duplicate_message(msg):
+                print(f"Дубль в пределах {DEDUP_WINDOW}s — пропуск: {msg.sender} {msg.receiver}")
+                return JSONResponse(status_code=200, content={"status": "ok", "duplicate": True})
+
             try:
                 text = msg.text.replace('*', '\\*')
                 await request_telegram(f"*На номер:* {msg.receiver}\n"
