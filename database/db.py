@@ -64,16 +64,29 @@ class DbConnection:
         version = self.session.query(Version).first()
         return version.version
 
+    # Площадка -> колонка-галочка в employee_mtsnumbers
+    MARKETPLACE_COLUMN = {'WB': 'wb', 'Ozon': 'ozon', 'Yandex': 'yandex', 'МВидео': 'mvideo'}
+
     @retry_on_exception()
-    def get_tg_id(self, phone: str) -> list[str] | None:
-        """Получение списка id Telegram для отправки сообщений из таблицы `employee_mtsnumbers`"""
+    def get_tg_id(self, phone: str, marketplace: str = None) -> list[str] | None:
+        """
+        Получение id Telegram для отправки сообщений из `employee_mtsnumbers`.
+        Если задан marketplace — вернём только тех, у кого стоит галочка на эту площадку.
+        Если marketplace не задан (не распознан / звонок) — вернём всех привязанных.
+        """
 
         tg_ids = []
 
         try:
             stmt = (select(EmployeeNumber.employee_id)
                     .join(Employee, Employee.tg_user_id == EmployeeNumber.employee_id)
-                    .where(EmployeeNumber.phone == phone, Employee.status == "works").distinct())
+                    .where(EmployeeNumber.phone == phone, Employee.status == "works"))
+
+            col = self.MARKETPLACE_COLUMN.get(marketplace) if marketplace else None
+            if col:
+                stmt = stmt.where(getattr(EmployeeNumber, col).is_(True))
+
+            stmt = stmt.distinct()
 
             result = self.session.execute(stmt).all()
 

@@ -1,5 +1,5 @@
 from sqlalchemy.orm import declarative_base, relationship
-from sqlalchemy import Column, String, MetaData, Integer, Identity, DateTime, Text, ForeignKey
+from sqlalchemy import Column, String, MetaData, Integer, Identity, DateTime, Text, ForeignKey, Boolean
 
 metadata = MetaData()
 Base = declarative_base(metadata=metadata)
@@ -95,6 +95,12 @@ class EmployeeNumber(Base):
 
     employee_id = Column(String(length=50), ForeignKey("employees.tg_user_id", ondelete="CASCADE"), primary_key=True)
     phone = Column(String(11), ForeignKey("mts_numbers.phone", ondelete="CASCADE"), primary_key=True)
+
+    # Галочки: какие площадки сотрудник получает по этому номеру
+    wb = Column(Boolean, default=True, nullable=False)
+    ozon = Column(Boolean, default=True, nullable=False)
+    yandex = Column(Boolean, default=True, nullable=False)
+    mvideo = Column(Boolean, default=True, nullable=False)
 
     employee = relationship("Employee", back_populates="mts_links")
     mts_number = relationship("MTSNumber", back_populates="employee_links")
