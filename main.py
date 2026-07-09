@@ -47,6 +47,15 @@ def is_duplicate_message(msg: MTSMessage) -> bool:
     return last is not None and now - last <= DEDUP_WINDOW
 
 
+# Novofon-номера (10 цифр), звонки/SMS которых дополнительно дублируются в бота
+# (адресно по привязке get_tg_id). Novofon-чат при этом получает копию как обычно.
+NOVOFON_TO_BOT = {
+    '9240778433', '9333994170', '9952226756', '9843332141',
+    '9699992486', '9699997468', '9581110845', '9333994184',
+    '9240778126', '9240779171', '9581119477', '9860889534',
+}
+
+
 def escape_mdv2(text: str) -> str:
     return re.sub(MDV2_SPECIALS, lambda m: '\\' + m.group(0), text)
 
@@ -80,13 +89,14 @@ async def request_telegram2(mes: str):
                 print(f"⚠️ Ошибка запроса к Telegram: {e}")
 
 
-async def request_telegram(mes: str, db_conn: DbConnection):
+async def request_telegram(mes: str, db_conn: DbConnection, phone: str = None):
     mes2 = escape_mdv2(mes)
 
     async def reg(tg_id: str = None):
-        api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-
         timeout = httpx.Timeout(10.0, connect=5.0)
+
+        # Поддержка одного бота (строка) и нескольких (список токенов)
+        tokens = TELEGRAM_BOT_TOKEN if isinstance(TELEGRAM_BOT_TOKEN, (list, tuple)) else [TELEGRAM_BOT_TOKEN]
 
         if tg_id is None:
             tg_id = TELEGRAM_CHAT_ID
@@ -94,29 +104,32 @@ async def request_telegram(mes: str, db_conn: DbConnection):
             tg_id = [tg_id]
 
         for id_tg in tg_id:
-            async with httpx.AsyncClient(proxy=PROXY, timeout=timeout) as client:
-                for _ in range(1):
-                    try:
-                        r = await client.post(api, data={"chat_id": str(id_tg),
-                                                         "text": mes2,
-                                                         "parse_mode": "Markdown",
-                                                         "disable_web_page_preview": True})
-                        if r.status_code == 200:
-                            break
-                    except httpx.RequestError as e:
-                        print(f"⚠️ Ошибка запроса к Telegram: {e}")
-                    await asyncio.sleep(3)
-                else:
-                    try:
-                        r = await client.post(api, data={"chat_id": str(id_tg),
-                                                         "text": mes,
-                                                         "disable_web_page_preview": True})
-                        if r.status_code != 200:
-                            print(f"Telegram 400: {r.text}")
-                    except httpx.RequestError as e:
-                        print(f"⚠️ Ошибка запроса к Telegram: {e}")
+            for token in tokens:
+                api = f"https://api.telegram.org/bot{token}/sendMessage"
+                async with httpx.AsyncClient(proxy=PROXY, timeout=timeout) as client:
+                    for _ in range(1):
+                        try:
+                            r = await client.post(api, data={"chat_id": str(id_tg),
+                                                             "text": mes2,
+                                                             "parse_mode": "Markdown",
+                                                             "disable_web_page_preview": True})
+                            if r.status_code == 200:
+                                break
+                        except httpx.RequestError as e:
+                            print(f"⚠️ Ошибка запроса к Telegram: {e}")
+                        await asyncio.sleep(3)
+                    else:
+                        try:
+                            r = await client.post(api, data={"chat_id": str(id_tg),
+                                                             "text": mes,
+                                                             "disable_web_page_preview": True})
+                            if r.status_code != 200:
+                                print(f"Telegram 400: {r.text}")
+                        except httpx.RequestError as e:
+                            print(f"⚠️ Ошибка запроса к Telegram: {e}")
 
-    phone = mes2.split('\n')[0].split()[-1]
+    if phone is None:
+        phone = mes2.split('\n')[0].split()[-1]
 
     if phone == '79340060237':
         try:
@@ -212,6 +225,13 @@ async def get_call(virtual_phone_number: str,
         except:
             pass
 
+        # Дублируем в бота (адресно по привязке) для выбранных Novofon-номеров
+        if virtual_phone_number in NOVOFON_TO_BOT:
+            try:
+                await request_telegram(text, db_conn, phone=f'7{virtual_phone_number}')
+            except:
+                pass
+
         # Последние 6 цифр контактного номера используются как "сообщение"
         contact_phone_number = re.sub(r'\D', '', contact_phone_number)
         message = contact_phone_number[-6:]
@@ -262,6 +282,13 @@ async def get_sms(virtual_phone_number: str,
             await request_telegram2(text)
         except:
             pass
+
+        # Дублируем в бота (адресно по привязке) для выбранных Novofon-номеров
+        if virtual_phone_number in NOVOFON_TO_BOT:
+            try:
+                await request_telegram(text, db_conn, phone=f'7{virtual_phone_number}')
+            except:
+                pass
 
         patterns = [
             (r'\b\d{6}\b', lambda s: s),
@@ -424,10 +451,12 @@ async def get_mts(request: Request,
             except Exception as e:
                 print(f'{str(e)}')
 
-        api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        tokens = TELEGRAM_BOT_TOKEN if isinstance(TELEGRAM_BOT_TOKEN, (list, tuple)) else [TELEGRAM_BOT_TOKEN]
         payload = {"chat_id": str(TELEGRAM_CHAT_ID), "text": body or raw}
         async with httpx.AsyncClient() as client:
-            await client.post(api, data=payload)
+            for token in tokens:
+                api = f"https://api.telegram.org/bot{token}/sendMessage"
+                await client.post(api, data=payload)
 
         return JSONResponse(status_code=200, content={"status": "ok"})
     except Exception as e:
