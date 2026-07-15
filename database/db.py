@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from pyodbc import Error as PyodbcError
 from datetime import datetime, timedelta
 from sqlalchemy.exc import OperationalError
-from sqlalchemy import create_engine, func as f, select
+from sqlalchemy import create_engine, func as f, select, or_
 
 from config import DB_URL
 from database.models import *
@@ -64,34 +64,35 @@ class DbConnection:
         version = self.session.query(Version).first()
         return version.version
 
-    # Площадка -> колонка-галочка в employee_mtsnumbers
+    # Площадка -> колонка-галочка в employees
     MARKETPLACE_COLUMN = {'WB': 'wb', 'Ozon': 'ozon', 'Yandex': 'yandex', 'МВидео': 'mvideo'}
 
     @retry_on_exception()
-    def get_tg_id(self, phone: str, marketplace: str = None) -> list[str] | None:
+    def get_tg_id(self, marketplace=None) -> list[str] | None:
         """
-        Получение id Telegram для отправки сообщений из `employee_mtsnumbers`.
-        Если задан marketplace — вернём только тех, у кого стоит галочка на эту площадку.
-        Если marketplace не задан (не распознан / звонок) — вернём всех привязанных.
+        Получение id Telegram для отправки сообщений — по галочкам площадок у сотрудника
+        (employees.wb/ozon/yandex/mvideo), без привязки к номеру.
+        marketplace — площадка (строка) или список: вернём тех, у кого галочка
+        хотя бы на одну из них. Без marketplace — пустой список (не рассылаем).
         """
 
         tg_ids = []
 
         try:
-            stmt = (select(EmployeeNumber.employee_id)
-                    .join(Employee, Employee.tg_user_id == EmployeeNumber.employee_id)
-                    .where(EmployeeNumber.phone == phone, Employee.status == "works"))
+            markets = marketplace if isinstance(marketplace, (list, tuple)) else [marketplace]
+            cols = [self.MARKETPLACE_COLUMN[m] for m in markets if m in self.MARKETPLACE_COLUMN]
+            if not cols:
+                return tg_ids
 
-            col = self.MARKETPLACE_COLUMN.get(marketplace) if marketplace else None
-            if col:
-                stmt = stmt.where(getattr(EmployeeNumber, col).is_(True))
-
-            stmt = stmt.distinct()
+            stmt = (select(Employee.tg_user_id)
+                    .where(Employee.status == "works",
+                           or_(*[getattr(Employee, c).is_(True) for c in cols]))
+                    .distinct())
 
             result = self.session.execute(stmt).all()
 
             if result:
-                tg_ids = [e.employee_id for e in result]
+                tg_ids = [e.tg_user_id for e in result]
             return tg_ids
         except:
             return None

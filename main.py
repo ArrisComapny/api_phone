@@ -155,7 +155,7 @@ async def request_telegram(mes: str, db_conn: DbConnection, phone: str = None, m
             pass
         return
 
-    tg_ids = await run_in_threadpool(db_conn.get_tg_id, phone, marketplace)
+    tg_ids = await run_in_threadpool(db_conn.get_tg_id, marketplace)
 
     if tg_ids is None:
         for tg in ADMIN_TG_ID:
@@ -242,10 +242,11 @@ async def get_call(virtual_phone_number: str,
         except:
             pass
 
-        # Дублируем в бота (адресно по привязке) для выбранных Novofon-номеров
+        # Звонок → отправляем тем, у кого отмечен Ozon или Yandex (звонки-верификация идут с этих площадок)
         if virtual_phone_number in NOVOFON_TO_BOT:
             try:
-                await request_telegram(text, db_conn, phone=f'7{virtual_phone_number}')
+                await request_telegram(text, db_conn, phone=f'7{virtual_phone_number}',
+                                       marketplace=['Ozon', 'Yandex'])
             except:
                 pass
 
@@ -300,11 +301,12 @@ async def get_sms(virtual_phone_number: str,
         except:
             pass
 
-        # Дублируем в бота (адресно по привязке, с фильтром по площадке) для выбранных Novofon-номеров
+        # Дублируем в бота (адресно, с фильтром по площадке). Не опознали площадку — в бот не шлём.
         if virtual_phone_number in NOVOFON_TO_BOT:
             try:
                 mkt = detect_marketplace(contact_phone_number, message)
-                await request_telegram(text, db_conn, phone=f'7{virtual_phone_number}', marketplace=mkt)
+                if mkt:
+                    await request_telegram(text, db_conn, phone=f'7{virtual_phone_number}', marketplace=mkt)
             except:
                 pass
 
@@ -420,12 +422,14 @@ async def get_mts(request: Request,
             try:
                 text = msg.text.replace('*', '\\*')
                 marketplace = detect_marketplace(msg.sender, msg.text)
-                await request_telegram(f"*На номер:* {msg.receiver}\n"
-                                       f"*От:* {msg.sender}\n\n"
-                                       f"*Сообщение:*\n"
-                                       f"{text}",
-                                       db_conn=db_conn,
-                                       marketplace=marketplace)
+                # Опознали площадку → шлём отмеченным; не опознали → в бот не шлём
+                if marketplace:
+                    await request_telegram(f"*На номер:* {msg.receiver}\n"
+                                           f"*От:* {msg.sender}\n\n"
+                                           f"*Сообщение:*\n"
+                                           f"{text}",
+                                           db_conn=db_conn,
+                                           marketplace=marketplace)
                 print(msg.sender, msg.receiver, msg.text)
 
                 # Дублируем сообщения этих номеров в общий Novofon-чат

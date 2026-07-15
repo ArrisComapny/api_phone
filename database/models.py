@@ -96,12 +96,6 @@ class EmployeeNumber(Base):
     employee_id = Column(String(length=50), ForeignKey("employees.tg_user_id", ondelete="CASCADE"), primary_key=True)
     phone = Column(String(11), ForeignKey("mts_numbers.phone", ondelete="CASCADE"), primary_key=True)
 
-    # Галочки: какие площадки сотрудник получает по этому номеру
-    wb = Column(Boolean, default=True, nullable=False)
-    ozon = Column(Boolean, default=True, nullable=False)
-    yandex = Column(Boolean, default=True, nullable=False)
-    mvideo = Column(Boolean, default=True, nullable=False)
-
     employee = relationship("Employee", back_populates="mts_links")
     mts_number = relationship("MTSNumber", back_populates="employee_links")
 
@@ -113,6 +107,12 @@ class Employee(Base):
     full_name = Column(String(length=255), nullable=False)
     role = Column(String(length=50), default="manager", nullable=False)
     status = Column(String(length=50), default="works", nullable=False)
+
+    # Галочки: сообщения каких площадок сотрудник получает (глобально)
+    wb = Column(Boolean, default=False, nullable=False)
+    ozon = Column(Boolean, default=False, nullable=False)
+    yandex = Column(Boolean, default=False, nullable=False)
+    mvideo = Column(Boolean, default=False, nullable=False)
 
     mts_links = relationship("EmployeeNumber", back_populates="employee", cascade="all, delete-orphan", passive_deletes=True)
     numbers = relationship("MTSNumber", secondary="employee_mtsnumbers", viewonly=True)
