@@ -68,12 +68,17 @@ class DbConnection:
     MARKETPLACE_COLUMN = {'WB': 'wb', 'Ozon': 'ozon', 'Yandex': 'yandex', 'МВидео': 'mvideo'}
 
     @retry_on_exception()
-    def get_tg_id(self, marketplace=None) -> list[str] | None:
+    def get_tg_id(self, phone: str, marketplace=None) -> list[str] | None:
         """
-        Получение id Telegram для отправки сообщений — по галочкам площадок у сотрудника
-        (employees.wb/ozon/yandex/mvideo), без привязки к номеру.
-        marketplace — площадка (строка) или список: вернём тех, у кого галочка
-        хотя бы на одну из них. Без marketplace — пустой список (не рассылаем).
+        Кому слать сообщение, пришедшее на номер `phone`.
+        Сотрудник получает, если выполнено ЛЮБОЕ из двух (условия складываются):
+
+        1) этот номер привязан к нему → получает ВСЁ со своих номеров,
+           независимо от галочек МП (в т.ч. если площадка не распознана);
+        2) у него стоит галочка площадки этого сообщения → получает сообщения
+           этой площадки с ЛЮБЫХ номеров.
+
+        Ни привязки к номеру, ни галочки → не получает ничего.
         """
 
         tg_ids = []
@@ -81,12 +86,23 @@ class DbConnection:
         try:
             markets = marketplace if isinstance(marketplace, (list, tuple)) else [marketplace]
             cols = [self.MARKETPLACE_COLUMN[m] for m in markets if m in self.MARKETPLACE_COLUMN]
-            if not cols:
-                return tg_ids
+
+            # привязан ли к сотруднику именно этот номер
+            linked_to_phone = (select(EmployeeNumber.employee_id)
+                               .where(EmployeeNumber.employee_id == Employee.tg_user_id,
+                                      EmployeeNumber.phone == phone)
+                               .exists())
+
+            if cols:
+                # свой номер ИЛИ галочка нужной площадки
+                condition = or_(linked_to_phone,
+                                *[getattr(Employee, c).is_(True) for c in cols])
+            else:
+                # площадка не распознана — остаются только привязанные к этому номеру
+                condition = linked_to_phone
 
             stmt = (select(Employee.tg_user_id)
-                    .where(Employee.status == "works",
-                           or_(*[getattr(Employee, c).is_(True) for c in cols]))
+                    .where(Employee.status == "works", condition)
                     .distinct())
 
             result = self.session.execute(stmt).all()
