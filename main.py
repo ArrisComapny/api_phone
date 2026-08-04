@@ -432,7 +432,7 @@ async def get_mts(request: Request,
                 print(msg.sender, msg.receiver, msg.text)
 
                 # Дублируем сообщения этих номеров в общий Novofon-чат
-                if msg.receiver[1:] in ('9393276833', '9681978744', '9820909411', '9064961724', '9667786703'):
+                if msg.receiver[1:] in ('9393276833', '9681978744', '9820909411', '9064961724', '9667786703','9862268017'):
                     try:
                         await request_telegram2(f"На номер: {msg.receiver}\n"
                                                 f"От: {msg.sender}\n\n"
@@ -440,7 +440,7 @@ async def get_mts(request: Request,
                     except:
                         pass
 
-                if msg.receiver[1:] in ('9393276833', '9681978744','9820909411','9064961724','9667786703'):
+                if msg.receiver[1:] in ('9393276833', '9681978744','9820909411','9064961724','9667786703','9862268017'):
                     if msg.sender == 'Wildberries':
                         code = ""
                         phone = msg.receiver[1:]
