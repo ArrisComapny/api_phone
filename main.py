@@ -10,7 +10,7 @@ from fastapi.middleware import Middleware
 from fastapi.concurrency import run_in_threadpool
 from datetime import datetime, timedelta, timezone
 from starlette.middleware.base import BaseHTTPMiddleware
-from fastapi import FastAPI, Request, Depends, HTTPException
+from fastapi import FastAPI, Request, Depends, HTTPException, BackgroundTasks
 from starlette.responses import StreamingResponse, JSONResponse
 
 from database.db import DbConnection
@@ -54,6 +54,11 @@ NOVOFON_TO_BOT = {
     '9699992486', '9699997468', '9581110845', '9333994184',
     '9240778126', '9240779171', '9581119477', '9860889534',
 }
+
+# Номер, на который формально переадресуются звонки Exolve.
+# Верификационный звонок маркетплейса сбрасывается раньше, чем дозвонится —
+# важен сам факт вызова, номер звонящего мы уже забрали из запроса
+EXOLVE_REDIRECT_NUMBER = "7931644756"
 
 # Определение площадки по ключевым словам (для фильтра по галочкам)
 MARKETPLACE_KEYWORDS = {
@@ -283,6 +288,83 @@ async def get_call(virtual_phone_number: str,
         status_code=200,
         content={"status": "ok", "details": details},
         headers={"X-Custom-Header": "some-value"}
+    )
+
+
+def save_call_code(virtual_phone_number: str, time_response: datetime, message: str) -> None:
+    """
+    Записывает код звонка в phone_message.
+    Выполняется в фоне со своей сессией: сессия из Depends закрывается
+    раньше, чем отработают фоновые задачи.
+    """
+    session = SessionLocal()
+    try:
+        DbConnection(session).add_message(virtual_phone_number=virtual_phone_number,
+                                          time_response=time_response,
+                                          message=message)
+    except Exception as e:
+        print(f"save_call_code: {e}")
+    finally:
+        session.close()
+
+
+@app.post("/exolve/call")
+async def get_exolve_call(request: Request, background_tasks: BackgroundTasks) -> JSONResponse:
+    """
+    Динамическая переадресация Exolve (метод getControlCallFollowMe).
+    Код авторизации — последние 6 цифр номера звонящего.
+
+    Ответ отдаём сразу: пока сервер думает, звонок висит на линии,
+    поэтому запись в базу и уведомление уходят в фон.
+    """
+    body = {}
+    try:
+        body = await request.json()
+    except Exception as e:
+        print(f"exolve/call: не удалось разобрать тело запроса: {e}")
+
+    params = (body or {}).get("params") or {}
+
+    # Номер звонящего (сторона A) и наш виртуальный номер (сторона B)
+    number_a = re.sub(r'\D', '', str(params.get("numberA", "")))
+    sip_id = re.sub(r'\D', '', str(params.get("sip_id", "")))[-10:]
+    call_sid = params.get("call_sid", "")
+
+    notification_time = datetime.now(tz=timezone(timedelta(hours=3))).replace(tzinfo=None)
+
+    print(f"exolve/call: sip_id={sip_id} numberA={number_a} call_sid={call_sid}")
+
+    if number_a and sip_id:
+        # Кодом являются последние 6 цифр номера, с которого поступил вызов
+        message = number_a[-6:]
+
+        text = (f"В {notification_time.strftime('%Y-%m-%d %H:%M:%S')} "
+                f"на ваш номер 7{sip_id} поступил звонок.\n"
+                f"Номер с которого поступил вызов: {number_a}")
+
+        background_tasks.add_task(save_call_code, sip_id, notification_time, message)
+        background_tasks.add_task(request_telegram2, text)
+
+    # Ответ в формате JSON-RPC — без него Exolve не смаршрутизирует вызов
+    return JSONResponse(
+        status_code=200,
+        content={
+            "id": (body or {}).get("id", 1),
+            "jsonrpc": "2.0",
+            "sip_id": params.get("sip_id", ""),
+            "result": {
+                "redirect_type": 1,
+                "followme_struct": [1, [{
+                    "I_FOLLOW_ORDER": 1,
+                    "ACTIVE": True,
+                    "NAME": "stub",
+                    "REDIRECT_NUMBER": EXOLVE_REDIRECT_NUMBER,
+                    "PERIOD": "always",
+                    "PERIOD_DESCRIPTION": "always",
+                    "TIMEOUT": 30,
+                }]],
+            },
+        }
     )
 
 
