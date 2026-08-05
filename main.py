@@ -73,6 +73,23 @@ def detect_marketplace(sender: str = '', text: str = '') -> str | None:
     return None
 
 
+# Шаблоны кода подтверждения в порядке приоритета: 123456, 123-456, 1234
+CODE_PATTERNS = [
+    (r'\b\d{6}\b', lambda s: s),
+    (r'\b\d{3}-\d{3}\b', lambda s: s.replace('-', '')),
+    (r'\b\d{4}\b', lambda s: s),
+]
+
+
+def extract_code(text: str) -> str:
+    """Достаёт код подтверждения из текста сообщения. Пустая строка — код не найден."""
+    for pattern, transform in CODE_PATTERNS:
+        match = re.search(pattern, text or '')
+        if match:
+            return transform(match.group(0))
+    return ''
+
+
 def escape_mdv2(text: str) -> str:
     return re.sub(MDV2_SPECIALS, lambda m: '\\' + m.group(0), text)
 
@@ -469,6 +486,18 @@ async def get_mts(request: Request,
                             code = match.group(0).replace('-', '')
                     if code:
                         db_conn2.add_code(virtual_phone_number=phone, time_response=notification_time, code=code)
+
+                # Коды остальных площадок (Ozon, Yandex, МВидео) — в phone_message.
+                # Отдельный if, а не ветка цепочки выше: номер может быть и в списке, и вне его
+                if msg.sender != 'Wildberries' and marketplace:
+                    code = extract_code(msg.text)
+                    print(f"{marketplace}: код {code or 'не найден'} на номер {msg.receiver}")
+                    if code:
+                        await run_in_threadpool(db_conn.add_message,
+                                                virtual_phone_number=msg.receiver[1:],
+                                                time_response=notification_time,
+                                                message=code,
+                                                marketplace=marketplace)
 
                 return JSONResponse(status_code=200, content={"status": "ok"})
             except Exception as e:
