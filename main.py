@@ -128,7 +128,7 @@ async def request_telegram2(mes: str):
                 print(f"⚠️ Ошибка запроса к Telegram: {e}")
 
 
-async def request_telegram(mes: str, db_conn: DbConnection, phone: str = None, marketplace: str = None):
+async def request_telegram(mes: str, db_conn: DbConnection, phone: str = None):
     mes2 = escape_mdv2(mes)
 
     async def reg(tg_id: str = None):
@@ -177,7 +177,7 @@ async def request_telegram(mes: str, db_conn: DbConnection, phone: str = None, m
             pass
         return
 
-    tg_ids = await run_in_threadpool(db_conn.get_tg_id, phone, marketplace)
+    tg_ids = await run_in_threadpool(db_conn.get_tg_id, phone)
 
     if tg_ids is None:
         for tg in ADMIN_TG_ID:
@@ -264,11 +264,10 @@ async def get_call(virtual_phone_number: str,
         except:
             pass
 
-        # Звонок → отправляем тем, у кого отмечен Ozon или Yandex (звонки-верификация идут с этих площадок)
+        # Дублируем в бота (адресно по привязке) для выбранных Novofon-номеров
         if virtual_phone_number in NOVOFON_TO_BOT:
             try:
-                await request_telegram(text, db_conn, phone=f'7{virtual_phone_number}',
-                                       marketplace=['Ozon', 'Yandex'])
+                await request_telegram(text, db_conn, phone=f'7{virtual_phone_number}')
             except:
                 pass
 
@@ -400,11 +399,10 @@ async def get_sms(virtual_phone_number: str,
         except:
             pass
 
-        # Дублируем в бота: «безномерным» — по галочкам МП, привязанным к номеру — всегда
+        # Дублируем в бота (адресно по привязке) для выбранных Novofon-номеров
         if virtual_phone_number in NOVOFON_TO_BOT:
             try:
-                mkt = detect_marketplace(contact_phone_number, message)
-                await request_telegram(text, db_conn, phone=f'7{virtual_phone_number}', marketplace=mkt)
+                await request_telegram(text, db_conn, phone=f'7{virtual_phone_number}')
             except:
                 pass
 
@@ -519,15 +517,13 @@ async def get_mts(request: Request,
 
             try:
                 text = msg.text.replace('*', '\\*')
+                # Площадка нужна только для записи кода в phone_message (ниже)
                 marketplace = detect_marketplace(msg.sender, msg.text)
-                # Кому уйдёт — решает get_tg_id: «безномерным» по галочкам МП,
-                # привязанным к этому номеру — всегда (даже если площадка не распознана)
                 await request_telegram(f"*На номер:* {msg.receiver}\n"
                                        f"*От:* {msg.sender}\n\n"
                                        f"*Сообщение:*\n"
                                        f"{text}",
-                                       db_conn=db_conn,
-                                       marketplace=marketplace)
+                                       db_conn=db_conn)
                 print(msg.sender, msg.receiver, msg.text)
 
                 # Дублируем сообщения этих номеров в общий Novofon-чат

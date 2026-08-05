@@ -1,5 +1,5 @@
 from sqlalchemy.orm import declarative_base, relationship
-from sqlalchemy import Column, String, MetaData, Integer, Identity, DateTime, Text, ForeignKey, Boolean
+from sqlalchemy import Column, String, MetaData, Integer, Identity, DateTime, Text, ForeignKey
 
 metadata = MetaData()
 Base = declarative_base(metadata=metadata)
@@ -107,12 +107,6 @@ class Employee(Base):
     full_name = Column(String(length=255), nullable=False)
     role = Column(String(length=50), default="manager", nullable=False)
     status = Column(String(length=50), default="works", nullable=False)
-
-    # Галочки: сообщения каких площадок сотрудник получает (глобально)
-    wb = Column(Boolean, default=False, nullable=False)
-    ozon = Column(Boolean, default=False, nullable=False)
-    yandex = Column(Boolean, default=False, nullable=False)
-    mvideo = Column(Boolean, default=False, nullable=False)
 
     mts_links = relationship("EmployeeNumber", back_populates="employee", cascade="all, delete-orphan", passive_deletes=True)
     numbers = relationship("MTSNumber", secondary="employee_mtsnumbers", viewonly=True)
