@@ -80,7 +80,11 @@ class DbConnection:
             if result:
                 tg_ids = [e.employee_id for e in result]
             return tg_ids
-        except:
+        except Exception as e:
+            # Откат обязателен: без него транзакция остаётся aborted,
+            # и все следующие запросы в этой сессии падают — в том числе add_message
+            logger.error(f"get_tg_id: {e}")
+            self.session.rollback()
             return None
 
     @retry_on_exception()

@@ -519,11 +519,18 @@ async def get_mts(request: Request,
                 text = msg.text.replace('*', '\\*')
                 # Площадка нужна только для записи кода в phone_message (ниже)
                 marketplace = detect_marketplace(msg.sender, msg.text)
-                await request_telegram(f"*На номер:* {msg.receiver}\n"
-                                       f"*От:* {msg.sender}\n\n"
-                                       f"*Сообщение:*\n"
-                                       f"{text}",
-                                       db_conn=db_conn)
+
+                # Уведомление отделено от записи кода: сбой Telegram не должен
+                # прерывать основную задачу — сохранение кода в phone_message
+                try:
+                    await request_telegram(f"*На номер:* {msg.receiver}\n"
+                                           f"*От:* {msg.sender}\n\n"
+                                           f"*Сообщение:*\n"
+                                           f"{text}",
+                                           db_conn=db_conn)
+                except Exception as e:
+                    print(f"request_telegram: {e}")
+
                 print(msg.sender, msg.receiver, msg.text)
 
                 # Дублируем сообщения этих номеров в общий Novofon-чат
