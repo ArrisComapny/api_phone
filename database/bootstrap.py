@@ -7,8 +7,8 @@ from config import DB_URL, DB_URL2
 engine = create_engine(
     url=DB_URL,
     echo=False,
-    pool_size=10,
-    max_overflow=5,
+    pool_size=20,
+    max_overflow=20,
     pool_timeout=30,
     pool_recycle=600,
     pool_pre_ping=True,
@@ -27,8 +27,8 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 engine2 = create_engine(
     url=DB_URL2,
     echo=False,
-    pool_size=10,
-    max_overflow=5,
+    pool_size=20,
+    max_overflow=20,
     pool_timeout=30,
     pool_recycle=600,
     pool_pre_ping=True,

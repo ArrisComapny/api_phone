@@ -418,18 +418,33 @@ async def get_sms(virtual_phone_number: str,
                 message = transform(match.group(0))
                 break
 
-        # Сопоставление названия платформы с кодом
+        # Сопоставление названия платформы с кодом.
+        # Отправитель не из списка -> KeyError, поэтому берём через .get с проверкой
         marketplace = {'Wildberries': 'WB', 'OZON.ru': 'Ozon', 'Yandex': 'Yandex', 'M.Video': 'МВидео'}
+        mkt = marketplace.get(contact_phone_number)
+
+        print(f"/sms: от={contact_phone_number!r} на={virtual_phone_number} "
+              f"площадка={mkt} код={message} время={notification_time}")
+
+        if mkt is None:
+            details = f"Неизвестный отправитель: {contact_phone_number}"
+            print(f"/sms: {details}")
+            return JSONResponse(
+                status_code=200,
+                content={"status": "ok", "details": details},
+                headers={"X-Custom-Header": "some-value"}
+            )
 
         # Сохраняем информацию в БД
         await run_in_threadpool(db_conn.add_message,
                                 virtual_phone_number=virtual_phone_number,
                                 time_response=notification_time,
                                 message=message,
-                                marketplace=marketplace[contact_phone_number])
+                                marketplace=mkt)
         details = "Сообщение получено"
     except Exception as e:
         details = f"Ошибка сообщения: {str(e)}"
+        print(f"/sms: {details}")
     return JSONResponse(
         status_code=200,
         content={"status": "ok", "details": details},

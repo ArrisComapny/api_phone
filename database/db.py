@@ -83,7 +83,7 @@ class DbConnection:
         except Exception as e:
             # Откат обязателен: без него транзакция остаётся aborted,
             # и все следующие запросы в этой сессии падают — в том числе add_message
-            logger.error(f"get_tg_id: {e}")
+            print(f"get_tg_id: {e}")
             self.session.rollback()
             return None
 
@@ -124,8 +124,18 @@ class DbConnection:
                 mes.time_response = time_response
                 mes.message = message
                 self.session.commit()
+                print(f"add_message: код {message} записан в заявку id={mes.id} "
+                      f"(phone={virtual_phone_number}, mp={marketplace})")
                 break
+
+            # Освобождаем соединение на время паузы: иначе оно держится все 30 сек
+            # и пул (10+5) выедается — остальные запросы виснут по pool_timeout
+            self.session.rollback()
             time.sleep(3)
+        else:
+            # Заявка не нашлась за 30 сек — код потерян, без лога это незаметно
+            print(f"add_message: заявка НЕ найдена - phone={virtual_phone_number}, "
+                  f"mp={marketplace}, time_response={time_response}, код={message}")
 
     @retry_on_exception()
     def add_log(self,
