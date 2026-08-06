@@ -21,7 +21,6 @@ def retry_on_exception(retries=3, delay=10):
     Повторяет вызов до `retries` раз с задержкой `delay` секунд.
     Откатывает сессию при каждой неудачной попытке.
     """
-
     def decorator(func):
         @wraps(func)
         def wrapper(self, *args, **kwargs):
@@ -32,9 +31,7 @@ def retry_on_exception(retries=3, delay=10):
                     return result
                 except (OperationalError, PyodbcError) as e:
                     attempt += 1
-                    # print, а не logger.debug: debug не виден в journalctl,
-                    # и реальная причина "Max retries exceeded" терялась
-                    print(f"retry {attempt}/{retries} после ошибки БД: {e}")
+                    logger.debug(f"Error occurred: {e}. Retrying {attempt}/{retries} after {delay} seconds...")
                     time.sleep(delay)
                     if hasattr(self, 'session'):
                         self.session.rollback()
