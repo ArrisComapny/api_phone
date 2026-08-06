@@ -21,6 +21,7 @@ def retry_on_exception(retries=3, delay=10):
     Повторяет вызов до `retries` раз с задержкой `delay` секунд.
     Откатывает сессию при каждой неудачной попытке.
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(self, *args, **kwargs):
@@ -101,7 +102,7 @@ class DbConnection:
                 # Поиск по нескольким маркетплейсам, если не указан явно
                 mes = self.session.query(PhoneMessage).filter(
                     PhoneMessage.phone == virtual_phone_number,
-                    PhoneMessage.marketplace.in_(['Ozon', 'Yandex']),
+                    PhoneMessage.marketplace.in_(['WB', 'Ozon', 'Yandex', 'МВидео']),
                     PhoneMessage.time_response.is_(None),
                     PhoneMessage.message.is_(None),
                     PhoneMessage.time_request <= time_response + timedelta(seconds=15),
@@ -123,8 +124,18 @@ class DbConnection:
                 mes.time_response = time_response
                 mes.message = message
                 self.session.commit()
+                print(f"add_message: код {message} записан в заявку id={mes.id} "
+                      f"(phone={virtual_phone_number}, mp={marketplace})")
                 break
+
+            # Освобождаем соединение на время паузы: иначе оно держится все 30 сек
+            # и пул (10+5) выедается — остальные запросы виснут по pool_timeout
+            self.session.rollback()
             time.sleep(3)
+        else:
+            # Заявка не нашлась за 30 сек — код потерян, без лога это незаметно
+            print(f"add_message: заявка НЕ найдена - phone={virtual_phone_number}, "
+                  f"mp={marketplace}, time_response={time_response}, код={message}")
 
     @retry_on_exception()
     def add_log(self,
