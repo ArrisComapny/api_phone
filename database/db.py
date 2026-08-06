@@ -101,11 +101,9 @@ class DbConnection:
                 # Поиск по нескольким маркетплейсам, если не указан явно
                 mes = self.session.query(PhoneMessage).filter(
                     PhoneMessage.phone == virtual_phone_number,
-                    PhoneMessage.marketplace.in_(['WB','Ozon', 'Yandex', 'МВидео']),
+                    PhoneMessage.marketplace.in_(['Ozon', 'Yandex']),
                     PhoneMessage.time_response.is_(None),
                     PhoneMessage.message.is_(None),
-                    # +60 сек: запас на расхождение часов клиента (time_request)
-                    # и Novofon (time_response) — при +5 сек совпадение срывалось
                     PhoneMessage.time_request <= time_response + timedelta(seconds=15),
                     PhoneMessage.time_request >= time_response - timedelta(minutes=2)
                 ).order_by(PhoneMessage.time_request.asc()).first()
@@ -116,8 +114,6 @@ class DbConnection:
                     PhoneMessage.marketplace == marketplace,
                     PhoneMessage.time_response.is_(None),
                     PhoneMessage.message.is_(None),
-                    # +60 сек: запас на расхождение часов клиента (time_request)
-                    # и Novofon (time_response) — при +5 сек совпадение срывалось
                     PhoneMessage.time_request <= time_response + timedelta(seconds=15),
                     PhoneMessage.time_request >= time_response - timedelta(minutes=2)
                 ).order_by(PhoneMessage.time_request.asc()).first()
@@ -127,18 +123,8 @@ class DbConnection:
                 mes.time_response = time_response
                 mes.message = message
                 self.session.commit()
-                print(f"add_message: код {message} записан в заявку id={mes.id} "
-                      f"(phone={virtual_phone_number}, mp={marketplace})")
                 break
-
-            # Освобождаем соединение на время паузы: иначе оно держится все 30 сек
-            # и пул (10+5) выедается — остальные запросы виснут по pool_timeout
-            self.session.rollback()
             time.sleep(3)
-        else:
-            # Заявка не нашлась за 30 сек — код потерян, без лога это незаметно
-            print(f"add_message: заявка НЕ найдена - phone={virtual_phone_number}, "
-                  f"mp={marketplace}, time_response={time_response}, код={message}")
 
     @retry_on_exception()
     def add_log(self,
