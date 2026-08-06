@@ -32,7 +32,9 @@ def retry_on_exception(retries=3, delay=10):
                     return result
                 except (OperationalError, PyodbcError) as e:
                     attempt += 1
-                    logger.debug(f"Error occurred: {e}. Retrying {attempt}/{retries} after {delay} seconds...")
+                    # print, а не logger.debug: debug не виден в journalctl,
+                    # и реальная причина "Max retries exceeded" терялась
+                    print(f"retry {attempt}/{retries} после ошибки БД: {e}")
                     time.sleep(delay)
                     if hasattr(self, 'session'):
                         self.session.rollback()
@@ -102,10 +104,12 @@ class DbConnection:
                 # Поиск по нескольким маркетплейсам, если не указан явно
                 mes = self.session.query(PhoneMessage).filter(
                     PhoneMessage.phone == virtual_phone_number,
-                    PhoneMessage.marketplace.in_(['Ozon', 'Yandex', 'МВидео']),
+                    PhoneMessage.marketplace.in_(['WB','Ozon', 'Yandex', 'МВидео']),
                     PhoneMessage.time_response.is_(None),
                     PhoneMessage.message.is_(None),
-                    PhoneMessage.time_request <= time_response + timedelta(seconds=5),
+                    # +60 сек: запас на расхождение часов клиента (time_request)
+                    # и Novofon (time_response) — при +5 сек совпадение срывалось
+                    PhoneMessage.time_request <= time_response + timedelta(seconds=15),
                     PhoneMessage.time_request >= time_response - timedelta(minutes=2)
                 ).order_by(PhoneMessage.time_request.asc()).first()
             else:
@@ -115,7 +119,9 @@ class DbConnection:
                     PhoneMessage.marketplace == marketplace,
                     PhoneMessage.time_response.is_(None),
                     PhoneMessage.message.is_(None),
-                    PhoneMessage.time_request <= time_response + timedelta(seconds=5),
+                    # +60 сек: запас на расхождение часов клиента (time_request)
+                    # и Novofon (time_response) — при +5 сек совпадение срывалось
+                    PhoneMessage.time_request <= time_response + timedelta(seconds=15),
                     PhoneMessage.time_request >= time_response - timedelta(minutes=2)
                 ).order_by(PhoneMessage.time_request.asc()).first()
 
