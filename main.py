@@ -55,6 +55,15 @@ NOVOFON_TO_BOT = {
     '9240778126', '9240779171', '9581119477', '9860889534',
 }
 
+# MTS-номера (10 цифр), обслуживающие ProxyBrowser: их WB-коды пишутся
+# в admin.phone_message (у остальных номеров — в buyer.phone_code),
+# а сами сообщения дополнительно дублируются в общий Novofon-чат.
+# Добавить номер = дописать строку сюда, трогать обработчик /mts не нужно.
+MTS_PROXYBROWSER = {
+    '9393276833', '9681978744', '9820909411',
+    '9064961724', '9667786703', '9862268017',
+}
+
 # Номер, на который формально переадресуются звонки Exolve.
 # Верификационный звонок маркетплейса сбрасывается раньше, чем дозвонится —
 # важен сам факт вызова, номер звонящего мы уже забрали из запроса
@@ -549,7 +558,7 @@ async def get_mts(request: Request,
                 print(msg.sender, msg.receiver, msg.text)
 
                 # Дублируем сообщения этих номеров в общий Novofon-чат
-                if msg.receiver[1:] in ('9393276833', '9681978744', '9820909411', '9064961724', '9667786703','9862268017'):
+                if msg.receiver[1:] in MTS_PROXYBROWSER:
                     try:
                         await request_telegram2(f"На номер: {msg.receiver}\n"
                                                 f"От: {msg.sender}\n\n"
@@ -557,7 +566,7 @@ async def get_mts(request: Request,
                     except:
                         pass
 
-                if msg.receiver[1:] in ('9393276833', '9681978744','9820909411','9064961724','9667786703','9862268017'):
+                if msg.receiver[1:] in MTS_PROXYBROWSER:
                     if msg.sender == 'Wildberries':
                         code = ""
                         phone = msg.receiver[1:]
@@ -604,11 +613,19 @@ async def get_mts(request: Request,
                 print(f'{str(e)}')
 
         tokens = TELEGRAM_BOT_TOKEN if isinstance(TELEGRAM_BOT_TOKEN, (list, tuple)) else [TELEGRAM_BOT_TOKEN]
-        payload = {"chat_id": str(TELEGRAM_CHAT_ID), "text": body or raw}
-        async with httpx.AsyncClient() as client:
+        # str() от списка чатов давал '[-100..., -100...]' — Telegram отвечал
+        # "chat not found", и нераспознанные сообщения молча терялись
+        chat_ids = TELEGRAM_CHAT_ID if isinstance(TELEGRAM_CHAT_ID, (list, tuple)) else [TELEGRAM_CHAT_ID]
+        async with httpx.AsyncClient(proxy=PROXY, timeout=httpx.Timeout(10.0, connect=5.0)) as client:
             for token in tokens:
                 api = f"https://api.telegram.org/bot{token}/sendMessage"
-                await client.post(api, data=payload)
+                for chat_id in chat_ids:
+                    try:
+                        r = await client.post(api, data={"chat_id": str(chat_id), "text": body or raw})
+                        if r.status_code != 200:
+                            print(f"fallback telegram {r.status_code}: {r.text}")
+                    except httpx.RequestError as e:
+                        print(f"fallback telegram: {e}")
 
         return JSONResponse(status_code=200, content={"status": "ok"})
     except Exception as e:
