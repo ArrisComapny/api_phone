@@ -55,19 +55,27 @@ NOVOFON_TO_BOT = {
     '9240778126', '9240779171', '9581119477', '9860889534',
 }
 
+EXOLVE_TO_BOT = {
+    '9862268017', '9393276850','9395154366',
+}
+
 # MTS-номера (10 цифр), обслуживающие ProxyBrowser: их WB-коды пишутся
 # в admin.phone_message (у остальных номеров — в buyer.phone_code),
 # а сами сообщения дополнительно дублируются в общий Novofon-чат.
 # Добавить номер = дописать строку сюда, трогать обработчик /mts не нужно.
 MTS_PROXYBROWSER = {
     '9393276833', '9681978744', '9820909411', '9667786703', '9862268017',
-    '9587143506',
+    '9587143506','9395154366','79393276850',
 }
 
 # Номер, на который формально переадресуются звонки Exolve.
 # Верификационный звонок маркетплейса сбрасывается раньше, чем дозвонится —
 # важен сам факт вызова, номер звонящего мы уже забрали из запроса
 EXOLVE_REDIRECT_NUMBER = "79316447568"
+
+# Exolve-номера (10 цифр), звонки которых дополнительно дублируются в бота
+# (адресно по привязке get_tg_id). Novofon-чат получает копию как обычно.
+# Добавить номер = дописать строку сюда.
 
 # Определение площадки по ключевым словам (для фильтра по галочкам)
 MARKETPLACE_KEYWORDS = {
@@ -316,6 +324,20 @@ def save_call_code(virtual_phone_number: str, time_response: datetime, message: 
         session.close()
 
 
+async def notify_call_to_bot(text: str, phone: str) -> None:
+    """
+    Адресная отправка звонка в бота (по привязке номера к сотруднику).
+    Своя сессия — по той же причине, что и в save_call_code.
+    """
+    session = SessionLocal()
+    try:
+        await request_telegram(text, DbConnection(session), phone=phone)
+    except Exception as e:
+        print(f"notify_call_to_bot: {e}")
+    finally:
+        session.close()
+
+
 @app.post("/exolve/call")
 async def get_exolve_call(request: Request, background_tasks: BackgroundTasks) -> JSONResponse:
     """
@@ -352,6 +374,10 @@ async def get_exolve_call(request: Request, background_tasks: BackgroundTasks) -
 
         background_tasks.add_task(save_call_code, sip_id, notification_time, message)
         background_tasks.add_task(request_telegram2, text)
+
+        # Дублируем в бота (адресно по привязке) для выбранных Exolve-номеров
+        if sip_id in EXOLVE_TO_BOT:
+            background_tasks.add_task(notify_call_to_bot, text, f'7{sip_id}')
 
     # Ответ в формате JSON-RPC — без него Exolve не смаршрутизирует вызов
     return JSONResponse(
