@@ -1,5 +1,5 @@
 from sqlalchemy.orm import declarative_base, relationship
-from sqlalchemy import Column, String, MetaData, Integer, Identity, DateTime, Text, ForeignKey
+from sqlalchemy import Column, String, MetaData, Integer, Identity, DateTime, Text, ForeignKey, Boolean
 
 metadata = MetaData()
 Base = declarative_base(metadata=metadata)
@@ -105,8 +105,14 @@ class Employee(Base):
 
     tg_user_id = Column(String(length=50), primary_key=True)
     full_name = Column(String(length=255), nullable=False)
+    # Роль одной строкой (назначается в боте):
+    #   admin | head <мп> | manager <мп> | manager | rating,  где <мп> = wb | ozon | yandex | mvideo.
+    # SMS площадки получают head/manager этой площадки и admin с receive_sms=True.
     role = Column(String(length=50), default="manager", nullable=False)
     status = Column(String(length=50), default="works", nullable=False)
+
+    # Только для admin: получать SMS площадок наравне с менеджерами
+    receive_sms = Column(Boolean, default=False, nullable=False)
 
     mts_links = relationship("EmployeeNumber", back_populates="employee", cascade="all, delete-orphan", passive_deletes=True)
     numbers = relationship("MTSNumber", secondary="employee_mtsnumbers", viewonly=True)
@@ -120,6 +126,24 @@ class MTSNumber(Base):
 
     employee_links = relationship("EmployeeNumber", back_populates="mts_number", cascade="all, delete-orphan", passive_deletes=True)
     employees = relationship("Employee", secondary="employee_mtsnumbers", viewonly=True)
+
+
+class Market(Base):
+    """
+    Таблица markets — магазины/кабинеты на маркетплейсах (ведётся DesktopBrowser).
+    Здесь только читается: по номеру и площадке даёт список магазинов,
+    чтобы detect_shop мог определить конкретный магазин по тексту SMS.
+
+    phone — 10 цифр без ведущей 7 (например 9240778433).
+    """
+    __tablename__ = 'markets'
+
+    id = Column(Integer, primary_key=True)
+    marketplace = Column(String(length=255), nullable=False)
+    name_company = Column(String(length=255), nullable=False)
+    phone = Column(String(length=255), nullable=False)
+    entrepreneur = Column(String(length=255), nullable=True)
+    client_id = Column(String(length=255), nullable=True)
 
 
 class PhoneCode(Base):

@@ -15,6 +15,7 @@ from starlette.responses import StreamingResponse, JSONResponse
 
 from database.db import DbConnection
 from pydantic_models import LogEntry
+from sms_routing import detect_marketplace, detect_shop, resolve_marketplace, MARKETPLACE_ROLES
 from database.bootstrap import SessionLocal, SessionLocal2
 from config import ALLOWED_IPS, FILE_PATH, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, ADMIN_TG_ID, PROXY, NOVOFON_BOT_TOKEN, \
     NOVOFON_CHAT_ID
@@ -77,22 +78,8 @@ EXOLVE_REDIRECT_NUMBER = "79316447568"
 # (адресно по привязке get_tg_id). Novofon-чат получает копию как обычно.
 # Добавить номер = дописать строку сюда.
 
-# Определение площадки по ключевым словам (для фильтра по галочкам)
-MARKETPLACE_KEYWORDS = {
-    'WB': ['wildberries', 'wb', 'вайлдберриз', 'вб'],
-    'Ozon': ['ozon', 'озон'],
-    'Yandex': ['yandex', 'яндекс'],
-    'МВидео': ['m.video', 'mvideo', 'мвидео'],
-}
-
-
-def detect_marketplace(sender: str = '', text: str = '') -> str | None:
-    """Определяет площадку: сначала по отправителю (надёжнее), потом по тексту. None — не распознано."""
-    for source in ((sender or '').lower(), (text or '').lower()):
-        for marketplace, keywords in MARKETPLACE_KEYWORDS.items():
-            if any(k in source for k in keywords):
-                return marketplace
-    return None
+# Определение площадки и магазина по тексту SMS вынесено в sms_routing.py
+# (detect_marketplace, detect_shop). Правила расширяются там — в MARKETPLACE_RULES.
 
 
 # Шаблоны кода подтверждения в порядке приоритета: 123456, 123-456, 1234
@@ -145,7 +132,14 @@ async def request_telegram2(mes: str):
                 print(f"⚠️ Ошибка запроса к Telegram: {e}")
 
 
-async def request_telegram(mes: str, db_conn: DbConnection, phone: str = None):
+async def request_telegram(mes: str, db_conn: DbConnection, phone: str = None,
+                           recipients: list[str] | None = None):
+    """
+    Отправка сообщения в бота.
+    recipients — готовый список tg_id (из get_sms_recipients, с учётом ролей менеджеров).
+    Если recipients не передан — получатели берутся по привязке номера (get_tg_id):
+    так работают звонки и другие события без текста, по которому можно определить площадку.
+    """
     mes2 = escape_mdv2(mes)
 
     async def reg(tg_id: str = None):
@@ -194,7 +188,10 @@ async def request_telegram(mes: str, db_conn: DbConnection, phone: str = None):
             pass
         return
 
-    tg_ids = await run_in_threadpool(db_conn.get_tg_id, phone)
+    if recipients is not None:
+        tg_ids = recipients
+    else:
+        tg_ids = await run_in_threadpool(db_conn.get_tg_id, phone)
 
     if tg_ids is None:
         for tg in ADMIN_TG_ID:
@@ -210,6 +207,52 @@ async def request_telegram(mes: str, db_conn: DbConnection, phone: str = None):
                 await reg(tg)
             except:
                 pass
+
+
+async def route_sms(header: str, message_text: str, sender: str, phone11: str, db_conn: DbConnection) -> None:
+    """
+    Маршрутизация входящего SMS. Приоритет строго такой:
+
+        MARKETPLACE  → номер в markets → всем сотрудникам с ролью площадки (привязка игнорируется)
+        BINDING      → номер привязан к сотруднику → только ему (существующая логика get_tg_id)
+        DEFAULT CHATS→ иначе в оба общих чата TELEGRAM_CHAT_ID
+
+    Одно SMS уходит ровно по одной ветке — либо менеджерам, либо владельцу, либо в чаты.
+    header — первые строки сообщения («На номер / От»), phone11 — номер в формате 79...
+    """
+    phone10 = phone11[-10:]
+    body = f"\n*Сообщение:*\n{message_text.replace('*', chr(92) + '*')}"
+
+    # 1. MARKETPLACE — номер из markets имеет наивысший приоритет
+    marketplaces = await run_in_threadpool(db_conn.get_marketplaces_by_number, phone10)
+    if marketplaces:
+        marketplace = resolve_marketplace(marketplaces, message_text, sender)
+        if marketplace is None:
+            # На номере несколько площадок, а по тексту не различить — не угадываем,
+            # чтобы Ozon-код не ушёл WB-менеджеру: отправляем в общие чаты и логируем
+            print(f"route_sms: {phone11} обслуживает {marketplaces}, площадку по тексту "
+                  f"не различить (от={sender!r}) → общие чаты")
+            await request_telegram(header + f"*Площадка:* ⚠️ не различить среди {', '.join(marketplaces)}\n" + body,
+                                   db_conn, phone=phone11, recipients=[])
+            return
+
+        shops = await run_in_threadpool(db_conn.get_shops_for_phone, phone10, marketplace)
+        shop = detect_shop(message_text, shops)
+        shop_label = shop or ("не определён" if shops else "нет в базе")
+
+        recipients = await run_in_threadpool(db_conn.get_users_by_marketplace_role, marketplace)
+        if not recipients:
+            # Обязательно в лог: SMS площадки без единого менеджера. Чтобы не потерять — в общие чаты
+            print(f"route_sms: {marketplace} на {phone11}: НЕТ сотрудников с ролью "
+                  f"{MARKETPLACE_ROLES.get(marketplace)} → общие чаты")
+
+        await request_telegram(header + f"*Площадка:* {marketplace} · *Магазин:* {shop_label}\n" + body,
+                               db_conn, phone=phone11, recipients=recipients)
+        return
+
+    # 2. BINDING / 3. DEFAULT CHATS — существующая логика без изменений:
+    # request_telegram сам берёт get_tg_id(phone) → привязанным, а если никого — в TELEGRAM_CHAT_ID
+    await request_telegram(header + body, db_conn, phone=phone11, recipients=None)
 
 
 class IPFilterMiddleware(BaseHTTPMiddleware):
@@ -434,12 +477,14 @@ async def get_sms(virtual_phone_number: str,
         except:
             pass
 
-        # Дублируем в бота (адресно по привязке) для выбранных Novofon-номеров
+        # Дублируем в бота для выбранных Novofon-номеров по тем же правилам, что /mts:
+        # MARKETPLACE → BINDING → DEFAULT CHATS (см. route_sms)
         if virtual_phone_number in NOVOFON_TO_BOT:
             try:
-                await request_telegram(text, db_conn, phone=f'7{virtual_phone_number}')
-            except:
-                pass
+                await route_sms(f"*На номер:* 7{virtual_phone_number}\n*От:* {contact_phone_number}\n",
+                                message, contact_phone_number, f'7{virtual_phone_number}', db_conn)
+            except Exception as e:
+                print(f"/sms → бот: {e}")
 
         patterns = [
             (r'\b\d{6}\b', lambda s: s),
@@ -566,20 +611,16 @@ async def get_mts(request: Request,
                 return JSONResponse(status_code=200, content={"status": "ok", "duplicate": True})
 
             try:
-                text = msg.text.replace('*', '\\*')
-                # Площадка нужна только для записи кода в phone_message (ниже)
-                marketplace = detect_marketplace(msg.sender, msg.text)
+                # Площадка по тексту — нужна ниже для записи кода в phone_message
+                marketplace = detect_marketplace(message_text=msg.text, sender=msg.sender)
 
-                # Уведомление отделено от записи кода: сбой Telegram не должен
-                # прерывать основную задачу — сохранение кода в phone_message
+                # Доставка: MARKETPLACE → BINDING → DEFAULT CHATS (см. route_sms).
+                # Отделена от записи кода: сбой Telegram не должен мешать сохранению кода
                 try:
-                    await request_telegram(f"*На номер:* {msg.receiver}\n"
-                                           f"*От:* {msg.sender}\n\n"
-                                           f"*Сообщение:*\n"
-                                           f"{text}",
-                                           db_conn=db_conn)
+                    await route_sms(f"*На номер:* {msg.receiver}\n*От:* {msg.sender}\n",
+                                    msg.text, msg.sender, msg.receiver, db_conn)
                 except Exception as e:
-                    print(f"request_telegram: {e}")
+                    print(f"route_sms: {e}")
 
                 print(msg.sender, msg.receiver, msg.text)
 

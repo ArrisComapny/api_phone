@@ -6,10 +6,11 @@ from sqlalchemy.orm import Session
 from pyodbc import Error as PyodbcError
 from datetime import datetime, timedelta
 from sqlalchemy.exc import OperationalError
-from sqlalchemy import create_engine, func as f, select
+from sqlalchemy import create_engine, func as f, select, or_, and_
 
 from config import DB_URL
 from database.models import *
+from sms_routing import marketplace_roles
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,63 @@ class DbConnection:
             print(f"get_tg_id: {e}")
             self.session.rollback()
             return None
+
+    @retry_on_exception()
+    def get_shops_for_phone(self, phone10: str, marketplace: str) -> list[str]:
+        """
+        Магазины (name_company) площадки `marketplace`, зарегистрированные на номере.
+        phone10 — 10 цифр без ведущей 7 (формат markets.phone). Пустой список — в базе нет.
+        """
+        try:
+            stmt = (select(Market.name_company)
+                    .where(Market.phone == phone10, Market.marketplace == marketplace)
+                    .distinct())
+            return [r.name_company for r in self.session.execute(stmt).all() if r.name_company]
+        except Exception as e:
+            print(f"get_shops_for_phone: {e}")
+            self.session.rollback()
+            return []
+
+    @retry_on_exception()
+    def get_marketplaces_by_number(self, phone10: str) -> list[str]:
+        """
+        Список marketplace-номеров живёт в таблице markets (phone -> marketplace).
+        Возвращает площадки, на которые зарегистрирован номер (10 цифр без 7).
+        Пустой список — номер не marketplace-номер. Добавить номер = строка в markets.
+        """
+        try:
+            stmt = select(Market.marketplace).where(Market.phone == phone10).distinct()
+            return [r.marketplace for r in self.session.execute(stmt).all() if r.marketplace]
+        except Exception as e:
+            print(f"get_marketplaces_by_number: {e}")
+            self.session.rollback()
+            return []
+
+    @retry_on_exception()
+    def get_users_by_marketplace_role(self, marketplace: str) -> list[str]:
+        """
+        Получатели SMS площадки (только status='works'):
+          - employees.role = 'head <мп>' или 'manager <мп>';
+          - employees.role = 'admin' с включённым receive_sms.
+        Привязки номеров здесь не учитываются: marketplace-номер уходит всем менеджерам площадки.
+        'rating' и 'manager' без площадки сюда не попадают никогда.
+        Пустой список — ни у кого нет роли (или ошибка БД — в лог).
+        """
+        roles = marketplace_roles(marketplace)
+        if not roles:
+            return []
+
+        try:
+            stmt = (select(Employee.tg_user_id)
+                    .where(Employee.status == "works",
+                           or_(Employee.role.in_(roles),
+                               and_(Employee.role == "admin", Employee.receive_sms.is_(True))))
+                    .distinct())
+            return [r.tg_user_id for r in self.session.execute(stmt).all()]
+        except Exception as e:
+            print(f"get_users_by_marketplace_role: {e}")
+            self.session.rollback()
+            return []
 
     @retry_on_exception()
     def add_message(self, virtual_phone_number: str, time_response: datetime, message: str,
