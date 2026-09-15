@@ -213,7 +213,8 @@ async def route_sms(header: str, message_text: str, sender: str, phone11: str, d
     """
     Маршрутизация входящего SMS. Приоритет строго такой:
 
-        MARKETPLACE  → номер в markets → всем сотрудникам с ролью площадки (привязка игнорируется)
+        MARKETPLACE  → номер в markets → только сотрудникам с ролью площадки (привязка игнорируется).
+                       В общие чаты SMS площадок НЕ уходят никогда: нет получателей — только лог.
         BINDING      → номер привязан к сотруднику → только ему (существующая логика get_tg_id)
         DEFAULT CHATS→ иначе в оба общих чата TELEGRAM_CHAT_ID
 
@@ -228,12 +229,18 @@ async def route_sms(header: str, message_text: str, sender: str, phone11: str, d
     if marketplaces:
         marketplace = resolve_marketplace(marketplaces, message_text, sender)
         if marketplace is None:
-            # На номере несколько площадок, а по тексту не различить — не угадываем,
-            # чтобы Ozon-код не ушёл WB-менеджеру: отправляем в общие чаты и логируем
+            # На номере несколько площадок, а по тексту не различить — не угадываем площадку,
+            # отправляем менеджерам всех площадок этого номера (в общие чаты — нельзя)
+            recipients = []
+            for mp in marketplaces:
+                for tg in await run_in_threadpool(db_conn.get_users_by_marketplace_role, mp):
+                    if tg not in recipients:
+                        recipients.append(tg)
             print(f"route_sms: {phone11} обслуживает {marketplaces}, площадку по тексту "
-                  f"не различить (от={sender!r}) → общие чаты")
-            await request_telegram(header + f"*Площадка:* ⚠️ не различить среди {', '.join(marketplaces)}\n" + body,
-                                   db_conn, phone=phone11, recipients=[])
+                  f"не различить (от={sender!r}) → менеджерам всех площадок: {recipients or 'НИКОГО'}")
+            if recipients:
+                await request_telegram(header + f"*Площадка:* ⚠️ не различить среди {', '.join(marketplaces)}\n" + body,
+                                       db_conn, phone=phone11, recipients=recipients)
             return
 
         shops = await run_in_threadpool(db_conn.get_shops_for_phone, phone10, marketplace)
@@ -242,9 +249,10 @@ async def route_sms(header: str, message_text: str, sender: str, phone11: str, d
 
         recipients = await run_in_threadpool(db_conn.get_users_by_marketplace_role, marketplace)
         if not recipients:
-            # Обязательно в лог: SMS площадки без единого менеджера. Чтобы не потерять — в общие чаты
+            # SMS площадки без единого получателя: в общие чаты не отправляем, только лог
             print(f"route_sms: {marketplace} на {phone11}: НЕТ сотрудников с ролью "
-                  f"{MARKETPLACE_ROLES.get(marketplace)} → общие чаты")
+                  f"{MARKETPLACE_ROLES.get(marketplace)} и админов с receive_sms → НЕ отправлено")
+            return
 
         await request_telegram(header + f"*Площадка:* {marketplace} · *Магазин:* {shop_label}\n" + body,
                                db_conn, phone=phone11, recipients=recipients)
